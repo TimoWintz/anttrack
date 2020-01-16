@@ -1,3 +1,6 @@
+import time
+import pyglet
+
 class Cyclist():
     def __init__(self, sprite, velodrome):
         self.sprite = sprite

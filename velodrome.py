@@ -45,7 +45,7 @@ class Velodrome():
         return np.linalg.norm(self.p1 - self.p2)
 
     def _arc_length(self):
-        return np.pi*radius
+        return np.pi*self.radius
 
     def pos_from_distance(self, d):
         assert(d >= 0)
