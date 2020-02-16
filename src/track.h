@@ -14,14 +14,14 @@ class Track
         double inner_radius;
         double track_length;
         double track_width;
-        const std::vector<double>& track_incline;
+        std::vector<double> track_incline;
 
         double straight_length;
     public:
         double get_length() { return track_length; };
         double get_width() { return track_width; };
 
-        Track(double inner_radius, double track_length, double track_width, const std::vector<double>& track_incline);
+        Track(double inner_radius, double track_length, double track_width, std::vector<double> track_incline);
         double interp_track_incline(double d);
         void coord_xyz_to_dh(const Vec3d& xyz, Vec2d& dh);
         void coord_dh_to_xyz(const Vec2d& dh, Vec3d& xyz);

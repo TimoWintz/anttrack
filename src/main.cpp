@@ -1,3 +1,5 @@
+#include <iostream>
+
 #include <Magnum/Image.h>
 #include <Magnum/GL/Buffer.h>
 #include <Magnum/GL/DefaultFramebuffer.h>
@@ -9,6 +11,7 @@
 #include <Magnum/MeshTools/Compile.h>
 #include <Magnum/Platform/Sdl2Application.h>
 #include <Magnum/Primitives/Grid.h>
+#include <Magnum/Primitives/Cube.h>
 #include <Magnum/SceneGraph/Camera.h>
 #include <Magnum/SceneGraph/Drawable.h>
 #include <Magnum/SceneGraph/MatrixTransformation3D.h>
@@ -16,9 +19,12 @@
 #include <Magnum/SceneGraph/Scene.h>
 #include <Magnum/Shaders/Flat.h>
 #include <Magnum/Shaders/VertexColor.h>
+#include <Magnum/Timeline.h>
 #include <Magnum/Trade/MeshData3D.h>
 
+
 #include "track.h"
+#include "rider.h"
 #include "constants.h"
 
 using namespace Magnum;
@@ -34,6 +40,19 @@ struct VertexColorData {
 static const Color3 track_color(0x0000ff_rgbf);
 static const Color3 track_color_up(0x000000_rgbf);
 
+class Rider3D : public Object3D {
+    Rider* _rider;
+    public:
+        Rider3D(Scene3D* scene, Rider* rider) : Object3D{scene}, _rider(rider) {};
+        void update(double dt=0) {
+            if (dt > 0) {
+                _rider->update(dt);
+            }
+            auto pos_xyz = _rider->pos_xyz();
+            auto transformation = Math::Matrix4<float>::translation({float(pos_xyz[0]), float(pos_xyz[1]), float(pos_xyz[2])});
+            setTransformation(transformation);
+        }
+};
 
 class TrackApp: public Platform::Application {
     public:
@@ -41,15 +60,21 @@ class TrackApp: public Platform::Application {
 
     private:
         void loadTrack();
+        void loadRiders();
         void drawEvent() override;
-        std::unique_ptr<Track> _track;
+
+        Timeline timeline;
+
+        Track* _track;
+        std::vector<Rider3D*> _riders;
 
         Shaders::VertexColor3D _vertexColorShader{NoCreate};
         Shaders::Flat3D _flatShader{NoCreate};
-        GL::Mesh _mesh{NoCreate}, _grid{NoCreate};
+        GL::Mesh _track_mesh{NoCreate}, _grid{NoCreate}, _rider_mesh{NoCreate};
 
         Scene3D _scene;
         SceneGraph::DrawableGroup3D _drawables;
+
         Object3D* _cameraObject;
         SceneGraph::Camera3D* _camera;
 
@@ -59,31 +84,31 @@ class TrackApp: public Platform::Application {
 
 class VertexColorDrawable: public SceneGraph::Drawable3D {
     public:
-        explicit VertexColorDrawable(Object3D& object, Shaders::VertexColor3D& shader, GL::Mesh& mesh, SceneGraph::DrawableGroup3D& drawables): SceneGraph::Drawable3D{object, &drawables}, _shader(shader), _mesh(mesh) {}
+        explicit VertexColorDrawable(Object3D& object, Shaders::VertexColor3D& shader, GL::Mesh& mesh, SceneGraph::DrawableGroup3D& drawables): SceneGraph::Drawable3D{object, &drawables}, _shader(shader), _track_mesh(mesh) {}
 
         void draw(const Matrix4& transformation, SceneGraph::Camera3D& camera) {
             _shader.setTransformationProjectionMatrix(camera.projectionMatrix()*transformation);
-            _mesh.draw(_shader);
+            _track_mesh.draw(_shader);
         }
 
     private:
         Shaders::VertexColor3D& _shader;
-        GL::Mesh& _mesh;
+        GL::Mesh& _track_mesh;
 };
 
 class FlatDrawable: public SceneGraph::Drawable3D {
     public:
-        explicit FlatDrawable(Object3D& object, Shaders::Flat3D& shader, GL::Mesh& mesh, SceneGraph::DrawableGroup3D& drawables): SceneGraph::Drawable3D{object, &drawables}, _shader(shader), _mesh(mesh) {}
+        explicit FlatDrawable(Object3D& object, Shaders::Flat3D& shader, GL::Mesh& mesh, SceneGraph::DrawableGroup3D& drawables): SceneGraph::Drawable3D{object, &drawables}, _shader(shader), _track_mesh(mesh) {}
 
         void draw(const Matrix4& transformation, SceneGraph::Camera3D& camera) {
             _shader.setColor(0x747474_rgbf)
                 .setTransformationProjectionMatrix(camera.projectionMatrix()*transformation);
-            _mesh.draw(_shader);
+            _track_mesh.draw(_shader);
         }
 
     private:
         Shaders::Flat3D& _shader;
-        GL::Mesh& _mesh;
+        GL::Mesh& _track_mesh;
 };
 
 TrackApp::TrackApp(const Arguments& arguments): Platform::Application{arguments, NoCreate} {
@@ -113,6 +138,7 @@ TrackApp::TrackApp(const Arguments& arguments): Platform::Application{arguments,
     new FlatDrawable{*grid, _flatShader, _grid, _drawables};
 
     loadTrack();
+    loadRiders();
 
     /* Set up the camera */
     _cameraObject = new Object3D{&_scene};
@@ -124,15 +150,21 @@ TrackApp::TrackApp(const Arguments& arguments): Platform::Application{arguments,
     _camera = new SceneGraph::Camera3D{*_cameraObject};
     _camera->setProjectionMatrix(Matrix4::perspectiveProjection(
         45.0_degf, Vector2{windowSize()}.aspectRatio(), 0.01f, 10000.0f));
+
+    timeline.start();
 }
 
 
 void TrackApp::drawEvent() {
     GL::defaultFramebuffer.clear(GL::FramebufferClear::Color|GL::FramebufferClear::Depth);
-
+    double dt = timeline.previousFrameDuration();
+    for (auto r : _riders) {
+        r->update(dt);
+    }
     _camera->draw(_drawables);
-
     swapBuffers();
+    timeline.nextFrame();
+    redraw();
 }
 
 void TrackApp::loadTrack() {
@@ -144,21 +176,21 @@ void TrackApp::loadTrack() {
 
     size_t n_points = 100;
     std::vector<double> track_incline = sine_track_incline(min_angle, max_angle, n_points); 
-    _track = std::unique_ptr<Track>(new Track(inner_radius, track_length, track_width, track_incline));
+    _track = new Track(inner_radius, track_length, track_width, track_incline);
 
     std::vector<VertexColorData> track_mesh_vertices(2*n_points);
     std::vector<UnsignedByte> track_mesh_indices(6*n_points);
     Vec2d dh;
     Vec3d xyz;
     for (size_t i = 0; i < n_points; i++) {
-        dh[0] = double(i) / n_points * track_length;
+        dh[0] = float(i) / n_points * track_length;
 
-        dh[1] = double(0);
+        dh[1] = float(0);
         _track->coord_dh_to_xyz(dh, xyz);
         track_mesh_vertices[2*i].pos = Vector3{float(xyz[0]), float(xyz[1]), float(xyz[2])};
         track_mesh_vertices[2*i].color = track_color;
 
-        dh[1] = double(track_width);
+        dh[1] = float(track_width);
         _track->coord_dh_to_xyz(dh, xyz);
         track_mesh_vertices[2*i+1].pos = Vector3{float(xyz[0]), float(xyz[1]), float(xyz[2])};
         track_mesh_vertices[2*i+1].color = track_color_up;
@@ -187,8 +219,8 @@ void TrackApp::loadTrack() {
     GL::Buffer index_buffer;
     index_buffer.setData(track_mesh_indices);
 
-    _mesh = GL::Mesh{};
-    _mesh.setCount(6*n_points)
+    _track_mesh = GL::Mesh{};
+    _track_mesh.setCount(6*n_points)
         .addVertexBuffer(vertex_buffer, 0,
          Shaders::VertexColor3D::Position{},
          Shaders::VertexColor3D::Color3{})
@@ -196,9 +228,22 @@ void TrackApp::loadTrack() {
 
     /* Track object */
     auto track = new Object3D{&_scene};
-    new VertexColorDrawable{*track, _vertexColorShader, _mesh, _drawables};
+    new VertexColorDrawable{*track, _vertexColorShader, _track_mesh, _drawables};
 }
 
+void TrackApp::loadRiders() {
+    auto rider_physics = new SimpleRiderPhysics(0.3, 0.01, 1.225, 75);
+    auto rider_controller = new ConstantPower(300);
+    auto rider_model = new WPModel(1000, 300);
+    auto rider = new Rider(_track, rider_physics, rider_model, rider_controller);
 
+    _rider_mesh = MeshTools::compile(Primitives::cubeSolid());
+
+    auto cube = new Rider3D(&_scene, rider);
+    (*cube).scale(Vector3{1.0f});
+    (*cube).update();
+    _riders.push_back(cube);
+    new VertexColorDrawable{*cube, _vertexColorShader, _rider_mesh, _drawables};
+}
 
 MAGNUM_APPLICATION_MAIN(TrackApp)

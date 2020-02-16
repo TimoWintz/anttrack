@@ -4,7 +4,7 @@
 #include "track.h"
 #include "constants.h"
 
-Track::Track(double inner_radius, double track_length, double track_width, const std::vector<double>& track_incline) :
+Track::Track(double inner_radius, double track_length, double track_width, std::vector<double> track_incline) :
         inner_radius(inner_radius), track_length(track_length), track_width(track_width), track_incline(track_incline) {
     straight_length= 0.5*(track_length - 2*constants::pi*inner_radius);
     assert(straight_length >= 0);
@@ -145,22 +145,30 @@ double Track::interp_track_incline(double d) {
     if (it == track_incline.size())
         it = 0;
     double k = id - ib;
+    while (k > 1)
+        k -= 1;
+    while (k < 0)
+        k += 1;
     return (1-k) * track_incline[ib] + k * track_incline[it]; //[o] of incline
 }
 
 
 static Vec3d tmp_xyz;
 static Vec2d tmp_dh;
+static double eps = 0.0001;
 
 double Track::update_position(const Vec3d& xyz, Vec3d& new_xyz, double dl, double angle) {
+    if (dl < eps)
+        return 0;
     coord_xyz_to_dh(xyz, tmp_dh);
     tmp_dh[0] += velocity_scaling(tmp_dh) * dl * std::cos(angle);
     tmp_dh[1] += dl * std::sin(angle);
 
+
     if (tmp_dh[1] > track_width)
-        tmp_dh[1] -= track_width;
+        tmp_dh[1] = track_width;
     else if (tmp_dh[1] < 0)
-        tmp_dh[1] += 0;
+        tmp_dh[1] = 0;
 
     coord_dh_to_xyz(tmp_dh, new_xyz);
     return (new_xyz[2] - xyz[2]) / dl;

@@ -64,10 +64,10 @@ class WPModel : public RiderModel
 
 class Rider
 {
-    std::shared_ptr<Track> _track;
-    std::shared_ptr<RiderPhysics> _rider_physics;
-    std::shared_ptr<RiderModel> _rider_model;
-    std::shared_ptr<RiderController> _rider_controller;
+    Track* _track;
+    RiderPhysics* _rider_physics;
+    RiderModel* _rider_model;
+    RiderController* _rider_controller;
 
     Vec3d _pos_xyz;
     Vec2d _pos_dh;
@@ -75,8 +75,9 @@ class Rider
     double _velocity;
 
     public:
-        Rider(std::shared_ptr<Track> track, std::shared_ptr<RiderPhysics> rider_physics);
+        Rider(Track* track, RiderPhysics* rider_physics, RiderModel* rider_model, RiderController* rider_controller);
         void update(double dt);
+        Vec3d& pos_xyz() {return _pos_xyz;};
 };
 
 #endif
