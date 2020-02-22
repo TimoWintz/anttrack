@@ -1,4 +1,7 @@
 #include <iostream>
+#include <sstream>
+#include <stdio.h>
+#include <string>
 
 #include <Magnum/Image.h>
 #include <Magnum/GL/Buffer.h>
@@ -20,6 +23,7 @@
 #include <Magnum/Shaders/Flat.h>
 #include <Magnum/Shaders/VertexColor.h>
 #include <Magnum/Timeline.h>
+#include <Magnum/ImGuiIntegration/Context.hpp>
 #include <Magnum/Trade/MeshData3D.h>
 
 
@@ -42,8 +46,15 @@ static const Color3 track_color_up(0x000000_rgbf);
 
 class Rider3D : public Object3D {
     Rider* _rider;
+    std::string _window_title;
+    std::stringstream _status;
+
     public:
-        Rider3D(Scene3D* scene, Rider* rider) : Object3D{scene}, _rider(rider) {};
+        Rider3D(Scene3D* scene, Rider* rider) : Object3D{scene}, _rider(rider) {
+                std::stringstream ss;
+                ss << "Rider " << rider->id();
+                _window_title = ss.str();
+            };
         void update(double dt=0) {
             if (dt > 0) {
                 _rider->update(dt);
@@ -51,6 +62,18 @@ class Rider3D : public Object3D {
             auto pos_xyz = _rider->pos_xyz();
             auto transformation = Math::Matrix4<float>::translation({float(pos_xyz[0]), float(pos_xyz[1]), float(pos_xyz[2])});
             setTransformation(transformation);
+
+            DescMap map = _rider->desc();
+            _status.str("");
+            for (auto x: map) {
+                _status << x.first << ": \n\t" << x.second << std::endl;
+            }
+        }
+
+        void draw_gui() {
+            ImGui::Begin(_window_title.c_str());
+            ImGui::Text(_status.str().c_str());
+            ImGui::End();
         }
 };
 
@@ -62,6 +85,11 @@ class TrackApp: public Platform::Application {
         void loadTrack();
         void loadRiders();
         void drawEvent() override;
+
+        void mousePressEvent(MouseEvent& event) override;
+        void mouseReleaseEvent(MouseEvent& event) override;
+        void mouseMoveEvent(MouseMoveEvent& event) override;
+        void mouseScrollEvent(MouseScrollEvent& event) override;
 
         Timeline timeline;
 
@@ -80,6 +108,8 @@ class TrackApp: public Platform::Application {
 
         Vector2i _lastPosition{-1};
         Vector3 _rotationPoint, _translationPoint;
+
+        ImGuiIntegration::Context _imgui{NoCreate};
 };
 
 class VertexColorDrawable: public SceneGraph::Drawable3D {
@@ -118,7 +148,7 @@ TrackApp::TrackApp(const Arguments& arguments): Platform::Application{arguments,
         const Vector2 dpiScaling = this->dpiScaling({});
         Configuration conf;
         conf.setTitle("Track")
-            .setSize(conf.size(), dpiScaling);
+            .setSize({1600, 960}, dpiScaling);
         GLConfiguration glConf;
         glConf.setSampleCount(dpiScaling.max() < 2.0f ? 8 : 2);
         if(!tryCreate(conf, glConf))
@@ -151,6 +181,17 @@ TrackApp::TrackApp(const Arguments& arguments): Platform::Application{arguments,
     _camera->setProjectionMatrix(Matrix4::perspectiveProjection(
         45.0_degf, Vector2{windowSize()}.aspectRatio(), 0.01f, 10000.0f));
 
+    /* Imgui setup */
+    _imgui = ImGuiIntegration::Context(Vector2{windowSize()}/dpiScaling(),
+                                             windowSize(), framebufferSize());
+    /* Set up proper blending to be used by ImGui. There's a great chance
+     *        you'll need this exact behavior for the rest of your scene. If not, set
+     *        this only for the drawFrame() call. */
+    GL::Renderer::setBlendEquation(GL::Renderer::BlendEquation::Add,
+                            GL::Renderer::BlendEquation::Add);
+    GL::Renderer::setBlendFunction(GL::Renderer::BlendFunction::SourceAlpha,
+                            GL::Renderer::BlendFunction::OneMinusSourceAlpha);
+
     timeline.start();
 }
 
@@ -162,9 +203,49 @@ void TrackApp::drawEvent() {
         r->update(dt);
     }
     _camera->draw(_drawables);
+
+    _imgui.newFrame();
+    ImGui::SetNextWindowSize(ImVec2(500, 100), ImGuiCond_FirstUseEver);
+    ImGui::Begin("App information");
+    ImGui::Text("Hello");
+    ImGui::End();
+
+    for (auto x: _riders)
+        x->draw_gui();
+    _imgui.updateApplicationCursor(*this);
+
+      /* Set appropriate states. If you only draw ImGui, it is sufficient to
+       *        just enable blending and scissor test in the constructor. */
+    GL::Renderer::enable(GL::Renderer::Feature::Blending);
+    GL::Renderer::enable(GL::Renderer::Feature::ScissorTest);
+    GL::Renderer::disable(GL::Renderer::Feature::FaceCulling);
+    GL::Renderer::disable(GL::Renderer::Feature::DepthTest);
+
+    _imgui.drawFrame();
+
     swapBuffers();
     timeline.nextFrame();
     redraw();
+}
+
+void TrackApp::mousePressEvent(MouseEvent& event) {
+        if(_imgui.handleMousePressEvent(event)) return;
+}
+
+void TrackApp::mouseReleaseEvent(MouseEvent& event) {
+        if(_imgui.handleMouseReleaseEvent(event)) return;
+}
+
+void TrackApp::mouseMoveEvent(MouseMoveEvent& event) {
+        if(_imgui.handleMouseMoveEvent(event)) return;
+}
+
+void TrackApp::mouseScrollEvent(MouseScrollEvent& event) {
+        if(_imgui.handleMouseScrollEvent(event)) {
+                    /* Prevent scrolling the page */
+                            event.setAccepted();
+                                    return;
+        }
 }
 
 void TrackApp::loadTrack() {
@@ -183,9 +264,9 @@ void TrackApp::loadTrack() {
     Vec2d dh;
     Vec3d xyz;
     for (size_t i = 0; i < n_points; i++) {
-        dh[0] = float(i) / n_points * track_length;
+        dh[0] = double(i) / n_points * track_length;
 
-        dh[1] = float(0);
+        dh[1] = 0;
         _track->coord_dh_to_xyz(dh, xyz);
         track_mesh_vertices[2*i].pos = Vector3{float(xyz[0]), float(xyz[1]), float(xyz[2])};
         track_mesh_vertices[2*i].color = track_color;
@@ -232,8 +313,8 @@ void TrackApp::loadTrack() {
 }
 
 void TrackApp::loadRiders() {
-    auto rider_physics = new SimpleRiderPhysics(0.3, 0.01, 1.225, 75);
-    auto rider_controller = new ConstantPower(300);
+    auto rider_physics = new SimpleRiderPhysics(0.3, 0.001, 1.225, 75);
+    auto rider_controller = new ConstantPower(600);
     auto rider_model = new WPModel(1000, 300);
     auto rider = new Rider(_track, rider_physics, rider_model, rider_controller);
 

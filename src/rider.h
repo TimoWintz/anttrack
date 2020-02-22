@@ -2,8 +2,11 @@
 #define RIDER_H_
 
 #include <memory>
+#include <map>
 
 #include "track.h"
+
+typedef std::map<std::string, float> DescMap;
 
 class RiderPhysics
 {
@@ -69,15 +72,21 @@ class Rider
     RiderModel* _rider_model;
     RiderController* _rider_controller;
 
+    static size_t _next_id;
+
     Vec3d _pos_xyz;
     Vec2d _pos_dh;
+    size_t _id;
 
     double _velocity;
+    double _power;
 
     public:
         Rider(Track* track, RiderPhysics* rider_physics, RiderModel* rider_model, RiderController* rider_controller);
         void update(double dt);
+        size_t id() {return _id;};
         Vec3d& pos_xyz() {return _pos_xyz;};
+        DescMap desc();
 };
 
 #endif
