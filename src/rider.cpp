@@ -28,12 +28,22 @@ Rider::Rider(Track* track, RiderPhysics* rider_physics, RiderModel* rider_model,
         _id = _next_id++;
 }
 
+static double eps = 0.0001;
+
 void Rider::update(double dt) {
     double steering = _rider_controller->steering();
     _power = _rider_controller->power();
 
     double dl = dt * _velocity;
-    double gradient = _track->update_position(_pos_xyz, dl, steering);
+    double old_z = _pos_xyz[2];
+    _track->update_position(_pos_dh, dl, steering);
+    _track->coord_dh_to_xyz(_pos_dh, _pos_xyz);
+
+    double gradient;
+    if (_velocity < eps)
+        gradient = 0;
+    else
+        gradient = (_pos_xyz[2] - old_z) / _velocity / dt;
 
     double max_power = _rider_model->maximum_power(dt);
     if (_power > max_power)
@@ -47,10 +57,24 @@ void Rider::update(double dt) {
         _velocity = 0;
 }
 
+void Rider::set_pos_dh(const Vec2d& dh){
+        _pos_dh[0] = dh[0];
+        _pos_dh[1] = dh[1];
+        _track->coord_dh_to_xyz(_pos_dh, _pos_xyz);
+}
+void Rider::set_pos_xyz(const Vec3d& xyz){
+        _pos_xyz[0] = xyz[0];
+        _pos_xyz[1] = xyz[1];
+        _pos_xyz[2] = xyz[2];
+        _track->coord_xyz_to_dh(_pos_xyz, _pos_dh);
+}
+
 DescMap Rider::desc() {
     DescMap map = DescMap();
     map.insert(DescMap::value_type("speed (km/h)", _velocity * 3.6));
     map.insert(DescMap::value_type("power (W)", _power));
+    map.insert(DescMap::value_type("distance (m)", _pos_dh[0]));
+    map.insert(DescMap::value_type("height (m)", _pos_dh[1]));
     return map;
 }
 

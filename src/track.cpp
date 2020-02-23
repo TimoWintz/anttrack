@@ -153,33 +153,15 @@ double Track::interp_track_incline(double d) {
 }
 
 
-static Vec3d tmp_xyz;
-static Vec2d tmp_dh;
-static double eps = 0.0001;
-
-double Track::update_position(const Vec3d& xyz, Vec3d& new_xyz, double dl, double angle) {
-    if (dl < eps)
-        return 0;
-    coord_xyz_to_dh(xyz, tmp_dh);
-    tmp_dh[0] += velocity_scaling(tmp_dh) * dl * std::cos(angle);
-    tmp_dh[1] += dl * std::sin(angle);
-
-
-    if (tmp_dh[1] > track_width)
-        tmp_dh[1] = track_width;
-    else if (tmp_dh[1] < 0)
-        tmp_dh[1] = 0;
-
-    coord_dh_to_xyz(tmp_dh, new_xyz);
-    return (new_xyz[2] - xyz[2]) / dl;
-}
-
-double Track::update_position(Vec3d& xyz, double dl, double angle) {
-    double x = update_position(xyz, tmp_xyz, dl, angle);
-    xyz[0] = tmp_xyz[0];
-    xyz[1] = tmp_xyz[1];
-    xyz[2] = tmp_xyz[2];
-    return x;
+void Track::update_position(Vec2d& dh, double dl, double angle) {
+    dh[0] += 1.0 / velocity_scaling(dh) * dl * std::cos(angle);
+    dh[1] += dl * std::sin(angle);
+    if (dh[1] < 0)
+        dh[1] = 0;
+    if (dh[1] > track_width)
+        dh[1] = track_width;
+    while (dh[0] > track_length)
+        dh[0] -= track_length;
 }
 
 std::vector<double> sine_track_incline(double min_incline, double max_incline, int n_points) {
@@ -188,4 +170,41 @@ std::vector<double> sine_track_incline(double min_incline, double max_incline, i
         res[i] = min_incline + 0.5 * (1 - std::cos(4 * constants::pi * double(i) / n_points)) * (max_incline - min_incline);
     }
     return res;
+}
+
+void Track::direction_vector(const Vec2d& dh, Vec3d& direction) {
+    double incline = interp_track_incline(dh[0] + 1) - interp_track_incline(dh[0]);
+    double d_incline = interp_track_incline(dh[0] + 1) - interp_track_incline(dh[0]);
+    double theta, d_theta;
+    direction[2] = std::cos(d_incline)*dh[1];
+    switch ( track_segment(dh) ) {
+        case TrackSegment::Straight1:
+            direction[0] = 1;
+            direction[1] = dh[1] * std::sin(incline);
+            break;
+        case TrackSegment::Straight2:
+            direction[0] = -1;
+            direction[1] = -dh[1] * std::sin(incline);
+            break;
+        case TrackSegment::Bank1:
+            theta = (dh[0] - straight_length / 2) / inner_radius;
+            d_theta = 1 / inner_radius;
+            direction[0] = std::cos(d_theta) * (inner_radius + dh[1] * std::cos(incline)) + std::sin(theta) * (-dh[1] * std::sin(d_incline));
+            direction[1] = std::sin(d_theta) * (inner_radius + dh[1] * std::cos(incline)) - std::cos(theta) * (-dh[1] * std::sin(d_incline));
+            break;
+        case TrackSegment::Bank2:
+            theta = (dh[0] - 1.5 * straight_length - inner_radius * constants::pi) / inner_radius;
+            d_theta = 1 / inner_radius;
+            direction[0] = - std::cos(d_theta) * (inner_radius + dh[1] * std::cos(incline)) - std::sin(theta) * (-dh[1] * std::sin(d_incline));
+            direction[1] = - std::sin(d_theta) * (inner_radius + dh[1] * std::cos(incline)) + std::cos(theta) * (-dh[1] * std::sin(d_incline));
+            break;
+        default:
+            break;
+    }
+    double norm = 0;
+    for (size_t i = 0; i < 3; i++)
+        norm += direction[i] * direction[i];
+    norm = std::sqrt(norm);
+    for (size_t i = 0; i < 3; i++)
+        direction[i] /= norm;
 }

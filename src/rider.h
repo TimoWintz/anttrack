@@ -85,7 +85,12 @@ class Rider
         Rider(Track* track, RiderPhysics* rider_physics, RiderModel* rider_model, RiderController* rider_controller);
         void update(double dt);
         size_t id() {return _id;};
+
         Vec3d& pos_xyz() {return _pos_xyz;};
+        Vec2d& pos_dh() {return _pos_dh;};
+        void set_pos_dh(const Vec2d& dh);
+        void set_pos_xyz(const Vec3d& xyz);
+
         DescMap desc();
 };
 

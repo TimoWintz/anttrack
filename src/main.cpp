@@ -82,6 +82,7 @@ class TrackApp: public Platform::Application {
         explicit TrackApp(const Arguments& arguments);
 
     private:
+        Rider* riderFactory();
         void loadTrack();
         void loadRiders();
         void drawEvent() override;
@@ -312,15 +313,29 @@ void TrackApp::loadTrack() {
     new VertexColorDrawable{*track, _vertexColorShader, _track_mesh, _drawables};
 }
 
-void TrackApp::loadRiders() {
+Rider* TrackApp::riderFactory() {
     auto rider_physics = new SimpleRiderPhysics(0.3, 0.001, 1.225, 75);
     auto rider_controller = new ConstantPower(600);
     auto rider_model = new WPModel(1000, 300);
     auto rider = new Rider(_track, rider_physics, rider_model, rider_controller);
+    return rider;
+}
+
+void TrackApp::loadRiders() {
+    auto rider0 = riderFactory();
+    auto rider1 = riderFactory();
+
+    rider1->set_pos_dh({0, 5});
 
     _rider_mesh = MeshTools::compile(Primitives::cubeSolid());
 
-    auto cube = new Rider3D(&_scene, rider);
+    auto cube = new Rider3D(&_scene, rider0);
+    (*cube).scale(Vector3{1.0f});
+    (*cube).update();
+    _riders.push_back(cube);
+    new VertexColorDrawable{*cube, _vertexColorShader, _rider_mesh, _drawables};
+
+    cube = new Rider3D(&_scene, rider1);
     (*cube).scale(Vector3{1.0f});
     (*cube).update();
     _riders.push_back(cube);
