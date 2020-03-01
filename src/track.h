@@ -3,8 +3,11 @@
 
 #include <array>
 #include <vector>
-typedef std::array<double, 3> Vec3d;
-typedef std::array<double, 2> Vec2d;
+#include <Eigen/Dense>
+
+typedef Eigen::Vector3d Vec3d;
+typedef Eigen::Vector2d Vec2d;
+typedef std::pair<Vec3d, Vec3d> PosVel;
 
 enum class TrackSegment { Straight1, Bank1, Straight2, Bank2 };
 

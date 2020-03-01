@@ -1,6 +1,7 @@
 #include "rider.h"
 #include "constants.h"
 #include <iostream>
+#include <numeric>
 
 static const double max_acceleration = 5*constants::g;
 size_t Rider::_next_id = 0;
@@ -38,6 +39,7 @@ void Rider::update(double dt) {
     double old_z = _pos_xyz[2];
     _track->update_position(_pos_dh, dl, steering);
     _track->coord_dh_to_xyz(_pos_dh, _pos_xyz);
+    _track->direction_vector(_pos_dh, _direction);
 
     double gradient;
     if (_velocity < eps)
@@ -92,4 +94,31 @@ void WPModel::update(double P, double dt) {
         _Wpbal += (_CP - P) * (_Wp - _Wpbal) / _Wp * dt;
     if (_Wpbal > _Wp)
         _Wpbal = _Wp;
+}
+
+double SimpleConeDrafting::slipstream_velocity(std::vector<PosVel> positions_and_velocities,
+                                   const Vec3d& position) {
+    auto cmp = [position](const PosVel& a, const PosVel& b) -> bool {
+        return (a.first - position).dot(a.second / a.second.norm()) < (b.first - position).dot(b.second / b.second.norm());
+    };
+    std::sort(positions_and_velocities.begin(), positions_and_velocities.end(), cmp);
+    double slipstream_velocity = 0.0;
+    Vec3d relpos;
+    double angle, dist, ratio, vel;
+    for (auto pv: positions_and_velocities) {
+        relpos = pv.first - position;
+        dist = relpos.dot(pv.second);
+        if (dist < 0)
+            continue;
+        angle = std::acos(dist / relpos.norm());
+        ratio = _max_multiplier * (_angle - angle);
+        if (ratio < 0)
+            continue;
+        vel = pv.second.norm();
+        ratio *= (_duration - dist / vel) / _duration;
+        if (ratio < 0)
+            continue;
+        slipstream_velocity += (pv.second.norm() - slipstream_velocity) * ratio;
+    }
+    return slipstream_velocity;
 }

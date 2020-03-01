@@ -3,6 +3,7 @@
 
 #include <memory>
 #include <map>
+#include <vector>
 
 #include "track.h"
 
@@ -76,22 +77,45 @@ class Rider
 
     Vec3d _pos_xyz;
     Vec2d _pos_dh;
+    Vec3d _direction;
     size_t _id;
 
     double _velocity;
     double _power;
+
 
     public:
         Rider(Track* track, RiderPhysics* rider_physics, RiderModel* rider_model, RiderController* rider_controller);
         void update(double dt);
         size_t id() {return _id;};
 
-        Vec3d& pos_xyz() {return _pos_xyz;};
-        Vec2d& pos_dh() {return _pos_dh;};
+        const Vec3d& pos_xyz() {return _pos_xyz;};
+        const Vec2d& pos_dh() {return _pos_dh;};
+        const Vec3d& direction_vector() {return _direction;};
+        Vec3d velocity_vector() {return _velocity * _direction;};
+        double velocity() {return _velocity;};
         void set_pos_dh(const Vec2d& dh);
         void set_pos_xyz(const Vec3d& xyz);
 
         DescMap desc();
+};
+
+class DraftingModel
+{
+    public:
+            virtual double slipstream_velocity(const std::vector<PosVel> positions_and_velocities,
+                                           const Vec3d& position) = 0;
+};
+
+class SimpleConeDrafting : public DraftingModel {
+    double _duration;
+    double _angle;
+    double _max_multiplier;
+    public:
+        SimpleConeDrafting(double duration, double angle, double max_multiplier=0.5) :
+            _duration(duration), _angle(angle), _max_multiplier(max_multiplier) {};
+            double slipstream_velocity(const std::vector<PosVel> positions_and_velocities,
+                                   const Vec3d& position) override;
 };
 
 #endif

@@ -3,7 +3,7 @@ find_package(Magnum REQUIRED GL Sdl2Application
     Primitives
     SceneGraph
     Shaders)
-find_package(MagnumIntegration REQUIRED ImGui)
+find_package(MagnumIntegration REQUIRED ImGui Eigen)
 find_package(ImGui REQUIRED Sources)
 
 set_directory_properties(PROPERTIES CORRADE_USE_PEDANTIC_FLAGS ON)
@@ -17,7 +17,8 @@ target_link_libraries(CycloTron PRIVATE
     Magnum::Primitives
     Magnum::SceneGraph
     Magnum::Shaders
-    MagnumIntegration::ImGui)
+    MagnumIntegration::ImGui
+    MagnumIntegration::Eigen)
 
 # Make the executable a default target to build & run in Visual Studio
 set_property(DIRECTORY ${PROJECT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT CycloTron)
