@@ -72,8 +72,12 @@ class Rider3D : public Object3D {
 
         void draw_gui() {
             ImGui::Begin(_window_title.c_str());
-            ImGui::Text(_status.str().c_str());
+            ImGui::Text("%s", _status.str().c_str());
             ImGui::End();
+        }
+
+        Rider* rider() {
+            return _rider;
         }
 };
 
@@ -83,6 +87,7 @@ class TrackApp: public Platform::Application {
 
     private:
         Rider* riderFactory();
+        RiderInteraction* riderInteraction;
         void loadTrack();
         void loadRiders();
         void drawEvent() override;
@@ -171,6 +176,14 @@ TrackApp::TrackApp(const Arguments& arguments): Platform::Application{arguments,
     loadTrack();
     loadRiders();
 
+
+    auto draftingModel = new SimpleConeDrafting(2.0, 25 / 180 * constants::pi);
+    riderInteraction = new RiderInteraction(draftingModel);
+
+    for (auto x: _riders) {
+        riderInteraction->add_rider(x->rider());
+    }
+
     /* Set up the camera */
     _cameraObject = new Object3D{&_scene};
     (*_cameraObject)
@@ -203,6 +216,7 @@ void TrackApp::drawEvent() {
     for (auto r : _riders) {
         r->update(dt);
     }
+    riderInteraction->update();
     _camera->draw(_drawables);
 
     _imgui.newFrame();
@@ -325,7 +339,7 @@ void TrackApp::loadRiders() {
     auto rider0 = riderFactory();
     auto rider1 = riderFactory();
 
-    rider1->set_pos_dh({0, 5});
+    rider1->set_pos_dh({5, 0});
 
     _rider_mesh = MeshTools::compile(Primitives::cubeSolid());
 

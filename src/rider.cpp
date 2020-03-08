@@ -13,15 +13,15 @@ double SimpleRiderPhysics::moving_resistance(double velocity) {
 double SimpleRiderPhysics::gravity_acceleration(double gradient) {
     return gradient * constants::g;
 }
-double SimpleRiderPhysics::acceleration(double velocity, double gradient, double power) {
-    double acceleration = power / velocity / mass - moving_resistance(velocity) / mass - gravity_acceleration(gradient);
+double SimpleRiderPhysics::acceleration(double velocity, double gradient, double power, double slipstream_velocity) {
+    double acceleration = power / velocity / mass - moving_resistance(velocity - slipstream_velocity) / mass - gravity_acceleration(gradient);
     if (acceleration > max_acceleration)
         return max_acceleration;
     return acceleration;
 }  
 
 Rider::Rider(Track* track, RiderPhysics* rider_physics, RiderModel* rider_model, RiderController* rider_controller) : 
-    _track(track), _rider_physics(rider_physics), _rider_model(rider_model), _rider_controller(rider_controller) {
+    _track(track), _rider_physics(rider_physics), _rider_model(rider_model), _rider_controller(rider_controller), _slipstream_velocity(0.0){
         _pos_dh[0] = 0;
         _pos_dh[1] = 0;
         _track->coord_dh_to_xyz(_pos_dh, _pos_xyz);
@@ -53,7 +53,7 @@ void Rider::update(double dt) {
 
     _rider_model->update(_power, dt);
 
-    double acceleration = _rider_physics->acceleration(_velocity, gradient, _power);
+    double acceleration = _rider_physics->acceleration(_velocity, gradient, _power, _slipstream_velocity);
     _velocity += dt * acceleration;
     if (_velocity < 0)
         _velocity = 0;
@@ -77,6 +77,11 @@ DescMap Rider::desc() {
     map.insert(DescMap::value_type("power (W)", _power));
     map.insert(DescMap::value_type("distance (m)", _pos_dh[0]));
     map.insert(DescMap::value_type("height (m)", _pos_dh[1]));
+    map.insert(DescMap::value_type("slipstream vel (km/h)", _slipstream_velocity * 3.6));
+    map.insert(DescMap::value_type("vel x (km/h)", velocity_vector()[0] * 3.6));
+    map.insert(DescMap::value_type("vel y (km/h)", velocity_vector()[1] * 3.6));
+    map.insert(DescMap::value_type("pos x (m)", pos_xyz()[0]));
+    map.insert(DescMap::value_type("pos y (m)", pos_xyz()[1]));
     return map;
 }
 
@@ -108,17 +113,41 @@ double SimpleConeDrafting::slipstream_velocity(std::vector<PosVel> positions_and
     for (auto pv: positions_and_velocities) {
         relpos = pv.first - position;
         dist = relpos.dot(pv.second);
-        if (dist < 0)
+        if (dist <= 0)
             continue;
-        angle = std::acos(dist / relpos.norm());
-        ratio = _max_multiplier * (_angle - angle);
-        if (ratio < 0)
-            continue;
+        // angle = std::acos(dist / relpos.norm());
+        // ratio = _max_multiplier * (_angle - angle);
+        // if (ratio < 0)
+        //     continue;
         vel = pv.second.norm();
-        ratio *= (_duration - dist / vel) / _duration;
+        ratio = _max_multiplier;
+        ratio *= (_duration - dist / vel / vel) / _duration;
+        // slipstream_velocity = dist;
         if (ratio < 0)
             continue;
         slipstream_velocity += (pv.second.norm() - slipstream_velocity) * ratio;
+        // slipstream_velocity = dist;
     }
+    // std::cout << "vel  = " << vel << std::endl;
+    // std::cout << slipstream_velocity << std::endl;
     return slipstream_velocity;
+}
+
+void RiderInteraction::update() {
+    for (size_t i = 0; i < _riders.size(); i++) {
+        _positions_and_velocities[i].first = _riders[i]->pos_xyz();
+        _positions_and_velocities[i].second = _riders[i]->velocity_vector();
+        for (size_t j=0; j < _riders.size(); j++) {
+            if (i == j)
+                continue;
+            auto dir_i = _riders[i]->direction_vector();
+            auto signed_dist = dir_i.dot(_riders[j]->pos_xyz() - _riders[i]->pos_xyz());
+            if (signed_dist > 0 && signed_dist < constants::rider_length) 
+                _riders[i]->set_velocity(_riders[j]->velocity());
+        }
+    }
+    for (auto rider : _riders) {
+        double slipstream_velocity = _drafting_model->slipstream_velocity(_positions_and_velocities, rider->pos_xyz());
+        rider->set_slipstream_velocity(slipstream_velocity);
+    }
 }

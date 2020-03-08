@@ -12,7 +12,7 @@ typedef std::map<std::string, float> DescMap;
 class RiderPhysics
 {
     public:
-        virtual double acceleration(double velocity, double gradient, double power) = 0;
+        virtual double acceleration(double velocity, double gradient, double power, double slipstream_velocity=0) = 0;
 };
 
 class SimpleRiderPhysics : public RiderPhysics
@@ -27,7 +27,7 @@ class SimpleRiderPhysics : public RiderPhysics
 
         double moving_resistance(double velocity);
         double gravity_acceleration(double gradient);
-        double acceleration(double velocity, double gradient, double power);
+        double acceleration(double velocity, double gradient, double power, double slipstream_velocity=0);
 };
 
 class RiderController
@@ -82,6 +82,7 @@ class Rider
 
     double _velocity;
     double _power;
+    double _slipstream_velocity; // drafting speed
 
 
     public:
@@ -96,6 +97,8 @@ class Rider
         double velocity() {return _velocity;};
         void set_pos_dh(const Vec2d& dh);
         void set_pos_xyz(const Vec3d& xyz);
+        void set_velocity(double vel) { _velocity = vel; };
+        void set_slipstream_velocity(double slipstream_velocity) {_slipstream_velocity = slipstream_velocity;};
 
         DescMap desc();
 };
@@ -116,6 +119,17 @@ class SimpleConeDrafting : public DraftingModel {
             _duration(duration), _angle(angle), _max_multiplier(max_multiplier) {};
             double slipstream_velocity(const std::vector<PosVel> positions_and_velocities,
                                    const Vec3d& position) override;
+};
+
+class RiderInteraction
+{
+    DraftingModel* _drafting_model;
+    std::vector<Rider*> _riders;
+    std::vector<PosVel> _positions_and_velocities;
+    public:
+        RiderInteraction(DraftingModel* drafting_model) : _drafting_model(drafting_model) {};
+        void add_rider(Rider* rider) { _riders.push_back(rider); _positions_and_velocities.push_back(PosVel());};
+        void update();
 };
 
 #endif

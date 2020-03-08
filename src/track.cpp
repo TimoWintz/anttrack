@@ -173,33 +173,37 @@ std::vector<double> sine_track_incline(double min_incline, double max_incline, i
 }
 
 void Track::direction_vector(const Vec2d& dh, Vec3d& direction) {
-    double incline = interp_track_incline(dh[0] + 1) - interp_track_incline(dh[0]);
-    double d_incline = interp_track_incline(dh[0] + 1) - interp_track_incline(dh[0]);
+    // TODO : back to 3D velocity vector..
+    // double incline = interp_track_incline(dh[0] + 1) - interp_track_incline(dh[0]);
+    // double d_incline = interp_track_incline(dh[0] + 1) - interp_track_incline(dh[0]);
     double theta, d_theta;
-    direction[2] = std::cos(d_incline)*dh[1];
+    // direction[2] = std::cos(d_incline)*dh[1];
+    direction[2] = 0.0;
     switch ( track_segment(dh) ) {
         case TrackSegment::Straight1:
             direction[0] = 1;
-            direction[1] = dh[1] * std::sin(incline);
+            // direction[1] = dh[1] * std::sin(d_incline);
+            direction[1] = 0;
             break;
         case TrackSegment::Straight2:
             direction[0] = -1;
-            direction[1] = -dh[1] * std::sin(incline);
+            direction[1] = 0;//-dh[1] * std::sin(d_incline);
             break;
         case TrackSegment::Bank1:
             theta = (dh[0] - straight_length / 2) / inner_radius;
             d_theta = 1 / inner_radius;
-            direction[0] = std::cos(d_theta) * (inner_radius + dh[1] * std::cos(incline)) + std::sin(theta) * (-dh[1] * std::sin(d_incline));
-            direction[1] = std::sin(d_theta) * (inner_radius + dh[1] * std::cos(incline)) - std::cos(theta) * (-dh[1] * std::sin(d_incline));
+            direction[0] = std::cos(theta); //* (-dh[1] * std::cos(d_incline));
+            direction[1] = std::sin(theta); //* (-dh[1] * std::cos(d_incline));
             break;
         case TrackSegment::Bank2:
             theta = (dh[0] - 1.5 * straight_length - inner_radius * constants::pi) / inner_radius;
             d_theta = 1 / inner_radius;
-            direction[0] = - std::cos(d_theta) * (inner_radius + dh[1] * std::cos(incline)) - std::sin(theta) * (-dh[1] * std::sin(d_incline));
-            direction[1] = - std::sin(d_theta) * (inner_radius + dh[1] * std::cos(incline)) + std::cos(theta) * (-dh[1] * std::sin(d_incline));
+            direction[0] = - std::cos(theta); //* (inner_radius + dh[1] * std::cos(incline)) - std::sin(theta) * (-dh[1] * std::sin(d_incline));
+            direction[1] = - std::sin(theta); //* (inner_radius + dh[1] * std::cos(incline)) + std::cos(theta) * (-dh[1] * std::sin(d_incline));
             break;
         default:
             break;
+        direction /= direction.norm();
     }
     double norm = 0;
     for (size_t i = 0; i < 3; i++)
