@@ -20,43 +20,52 @@ double SimpleRiderPhysics::acceleration(double velocity, double gradient, double
     return acceleration;
 }  
 
-Rider::Rider(Track* track, RiderPhysics* rider_physics, RiderModel* rider_model, RiderController* rider_controller) : 
-    _track(track), _rider_physics(rider_physics), _rider_model(rider_model), _rider_controller(rider_controller), _slipstream_velocity(0.0){
+double SimpleRiderPhysics::current_power(double velocity, double gradient, double acceleration, double slipstream_velocity) {
+    return acceleration * velocity * mass + moving_resistance(velocity - slipstream_velocity) * velocity + 
+        gravity_acceleration(gradient) * velocity * mass;
+}  
+
+Rider::Rider(Track* track, RiderPhysics* rider_physics) : 
+    _track(track), _rider_physics(rider_physics),  _slipstream_velocity(0.0) {
         _pos_dh[0] = 0;
         _pos_dh[1] = 0;
         _track->coord_dh_to_xyz(_pos_dh, _pos_xyz);
         _velocity = 0;
+        _power = 0;
+        _max_velocity = 1000;
         _id = _next_id++;
 }
 
 static double eps = 0.0001;
 
 void Rider::update(double dt) {
-    double steering = _rider_controller->steering();
-    _power = _rider_controller->power();
-
+    if (dt == 0)
+        return;
     double dl = dt * _velocity;
     double old_z = _pos_xyz[2];
-    _track->update_position(_pos_dh, dl, steering);
+
+    _track->update_position(_pos_dh, dl, _steering);
     _track->coord_dh_to_xyz(_pos_dh, _pos_xyz);
     _track->direction_vector(_pos_dh, _direction);
 
-    double gradient;
     if (_velocity < eps)
-        gradient = 0;
+        _gradient = 0;
     else
-        gradient = (_pos_xyz[2] - old_z) / _velocity / dt;
+        _gradient = (_pos_xyz[2] - old_z) / _velocity / dt;
 
-    double max_power = _rider_model->maximum_power(dt);
-    if (_power > max_power)
-        _power = max_power;
-
-    _rider_model->update(_power, dt);
-
-    double acceleration = _rider_physics->acceleration(_velocity, gradient, _power, _slipstream_velocity);
-    _velocity += dt * acceleration;
-    if (_velocity < 0)
-        _velocity = 0;
+    double acceleration = _rider_physics->acceleration(_velocity, _gradient, _power, _slipstream_velocity);
+    double tmp_velocity = _velocity + dt * acceleration;
+    if (tmp_velocity < 0)
+        tmp_velocity = 0;
+    if (tmp_velocity > _max_velocity) {
+        tmp_velocity = _max_velocity;
+    }
+    acceleration = (tmp_velocity - _velocity) / dt;
+    _velocity = tmp_velocity;
+    if (_velocity > 0)
+        _power = _rider_physics->current_power(_velocity, _gradient, acceleration, _slipstream_velocity);
+    if (_power < 0)
+        _power = 0;
 }
 
 void Rider::set_pos_dh(const Vec2d& dh){
@@ -143,7 +152,9 @@ void RiderInteraction::update() {
             auto dir_i = _riders[i]->direction_vector();
             auto signed_dist = dir_i.dot(_riders[j]->pos_xyz() - _riders[i]->pos_xyz());
             if (signed_dist > 0 && signed_dist < constants::rider_length) 
-                _riders[i]->set_velocity(_riders[j]->velocity());
+                _riders[i]->set_max_velocity(_riders[j]->velocity());
+            else
+                _riders[i]->set_max_velocity(std::numeric_limits<double>::max());
         }
     }
     for (auto rider : _riders) {

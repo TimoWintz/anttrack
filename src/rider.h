@@ -13,6 +13,7 @@ class RiderPhysics
 {
     public:
         virtual double acceleration(double velocity, double gradient, double power, double slipstream_velocity=0) = 0;
+        virtual double current_power(double velocity, double gradient, double acceleration=0, double slipstream_velocity=0) = 0;
 };
 
 class SimpleRiderPhysics : public RiderPhysics
@@ -28,6 +29,7 @@ class SimpleRiderPhysics : public RiderPhysics
         double moving_resistance(double velocity);
         double gravity_acceleration(double gradient);
         double acceleration(double velocity, double gradient, double power, double slipstream_velocity=0);
+        double current_power(double velocity, double gradient, double acceleration=0, double slipstream_velocity=0);
 };
 
 class RiderController
@@ -70,8 +72,6 @@ class Rider
 {
     Track* _track;
     RiderPhysics* _rider_physics;
-    RiderModel* _rider_model;
-    RiderController* _rider_controller;
 
     static size_t _next_id;
 
@@ -81,24 +81,44 @@ class Rider
     size_t _id;
 
     double _velocity;
+    double _max_velocity;
     double _power;
     double _slipstream_velocity; // drafting speed
+    double _steering;
+    double _gradient;
 
 
     public:
-        Rider(Track* track, RiderPhysics* rider_physics, RiderModel* rider_model, RiderController* rider_controller);
+        Rider(Track* track, RiderPhysics* rider_physics);
         void update(double dt);
         size_t id() {return _id;};
 
-        const Vec3d& pos_xyz() {return _pos_xyz;};
-        const Vec2d& pos_dh() {return _pos_dh;};
         const Vec3d& direction_vector() {return _direction;};
         Vec3d velocity_vector() {return _velocity * _direction;};
-        double velocity() {return _velocity;};
+
+        const Vec2d& pos_dh() {return _pos_dh;};
         void set_pos_dh(const Vec2d& dh);
+
+        const Vec3d& pos_xyz() {return _pos_xyz;};
         void set_pos_xyz(const Vec3d& xyz);
+
+        double velocity() {return _velocity;};
         void set_velocity(double vel) { _velocity = vel; };
+
+        double max_velocity() {return _max_velocity;};
+        void set_max_velocity(double max_vel) { _max_velocity = max_vel; };
+
+        double power() {return _power;};
+        void set_power(double p) {_power = p;};
+
+        double slipstream_velocity() {return _slipstream_velocity;};
         void set_slipstream_velocity(double slipstream_velocity) {_slipstream_velocity = slipstream_velocity;};
+
+        double steering() {return _steering;};
+        void set_steering(double steering) {_steering= steering;};
+
+        double gradient() {return _gradient;};
+        void set_gradient(double gradient) {_gradient= gradient;};
 
         DescMap desc();
 };
