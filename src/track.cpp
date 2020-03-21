@@ -4,8 +4,8 @@
 #include "track.h"
 #include "constants.h"
 
-Track::Track(double inner_radius, double track_length, double track_width, std::vector<double> track_incline) :
-        inner_radius(inner_radius), track_length(track_length), track_width(track_width), track_incline(track_incline) {
+Track::Track(double inner_radius, double track_length, double track_width, std::vector<double> track_incline, double finish_line_position) :
+        inner_radius(inner_radius), track_length(track_length), track_width(track_width), track_incline(track_incline), _finish_line_position(finish_line_position){
     straight_length= 0.5*(track_length - 2*constants::pi*inner_radius);
     assert(straight_length >= 0);
 }

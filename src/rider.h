@@ -4,6 +4,9 @@
 #include <memory>
 #include <map>
 #include <vector>
+#include <iostream>
+#include <fstream>
+#include <thread>
 
 #include "track.h"
 
@@ -12,7 +15,7 @@ typedef std::map<std::string, float> DescMap;
 class RiderPhysics
 {
     public:
-        virtual double acceleration(double velocity, double gradient, double power, double slipstream_velocity=0) = 0;
+        virtual double delta_v(double velocity, double gradient, double power, double dt, double slipstream_velocity=0) = 0;
         virtual double current_power(double velocity, double gradient, double acceleration=0, double slipstream_velocity=0) = 0;
 };
 
@@ -28,13 +31,14 @@ class SimpleRiderPhysics : public RiderPhysics
 
         double moving_resistance(double velocity);
         double gravity_acceleration(double gradient);
-        double acceleration(double velocity, double gradient, double power, double slipstream_velocity=0);
+        double delta_v(double velocity, double gradient, double power, double dt, double slipstream_velocity=0);
         double current_power(double velocity, double gradient, double acceleration=0, double slipstream_velocity=0);
 };
 
 class RiderController
 {
     public:
+        virtual void update() = 0;
         virtual double power() = 0;
         virtual double steering() = 0;
 };
@@ -44,28 +48,34 @@ class ConstantPower : public RiderController
     double _power;
     public:
         ConstantPower(double power) : _power(power) {};
+        void update() {};
         double power() {return _power;}
         double steering() {return 0;}
 };
 
-
-class RiderModel 
+class FifoController : public RiderController
 {
-    public:
-        virtual double maximum_power(double dt) = 0;
-        virtual void update(double P, double dt) = 0;
-};
+    std::ifstream _fifo;
+    char _buffer[100];
+    char _buffer_index;
+    double _power;
+    double _steering;
+    std::string _line;
+    std::stringstream _line_stream;
+    char _control;
+    float _value;
 
-class WPModel : public RiderModel
-{
-    double _Wp;
-    double _Wpbal;
-    double _CP;
+    bool _done;
 
     public:
-        WPModel(double Wp, double CP) : _Wp(Wp), _Wpbal(Wp), _CP(CP) {};
-        double maximum_power(double dt);
-        void update(double P, double dt);
+        void update();
+        FifoController(const char* fname) : _power(0), _steering(0), _done(false) {
+            std::cout << "opening fifo..." << std::endl;
+            _fifo.open(fname, std::ios::in);
+            std::cout << "done." << std::endl;
+        }
+        double power() {return _power;}
+        double steering() {return _steering;}
 };
 
 class Rider
@@ -79,6 +89,7 @@ class Rider
     Vec2d _pos_dh;
     Vec3d _direction;
     size_t _id;
+    double _dl;
 
     double _velocity;
     double _max_velocity;
@@ -119,6 +130,10 @@ class Rider
 
         double gradient() {return _gradient;};
         void set_gradient(double gradient) {_gradient= gradient;};
+
+        double dl() {return _dl;}
+        double length() {return 2.0;}
+        double width() {return 0.5;}
 
         DescMap desc();
 };

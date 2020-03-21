@@ -7,9 +7,11 @@ find_package(MagnumIntegration REQUIRED ImGui Eigen)
 find_package(ImGui REQUIRED Sources)
 
 set_directory_properties(PROPERTIES CORRADE_USE_PEDANTIC_FLAGS ON)
+include_directories(../toml11)
 
-add_executable(CycloTron main.cpp track.cpp rider.cpp)
+add_executable(CycloTron main.cpp track.cpp rider.cpp race.cpp)
 target_link_libraries(CycloTron PRIVATE
+    pthread
     Magnum::Application
     Magnum::GL
     Magnum::Magnum

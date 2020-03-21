@@ -2,6 +2,9 @@
 #include <sstream>
 #include <stdio.h>
 #include <string>
+#include <toml.hpp> // that's all! now you can use it.
+#include <stdlib.h>     /* strtol */
+#include <fstream>
 
 #include <Magnum/Image.h>
 #include <Magnum/GL/Buffer.h>
@@ -29,7 +32,8 @@
 
 #include "track.h"
 #include "rider.h"
-#include "constants.h"
+#include "utils.h"
+#include "race.h"
 
 using namespace Magnum;
 using namespace Math::Literals;
@@ -43,6 +47,7 @@ struct VertexColorData {
 };
 static const Color3 track_color(0x0000ff_rgbf);
 static const Color3 track_color_up(0x000000_rgbf);
+static const Color3 track_color_finish(0xffffff_rgbf);
 
 class Rider3D : public Object3D {
     Rider* _rider;
@@ -55,12 +60,10 @@ class Rider3D : public Object3D {
                 ss << "Rider " << rider->id();
                 _window_title = ss.str();
             };
-        void update(double dt=0) {
-            if (dt > 0) {
-                _rider->update(dt);
-            }
+        void update() {
             auto pos_xyz = _rider->pos_xyz();
-            auto transformation = Math::Matrix4<float>::translation({float(pos_xyz[0]), float(pos_xyz[1]), float(pos_xyz[2])});
+            auto transformation = Math::Matrix4<float>::translation({float(pos_xyz[0]), float(pos_xyz[1]), float(pos_xyz[2])}) *
+                    Math::Matrix4<float>::scaling({0.5f, 0.5f, 0.5f});
             setTransformation(transformation);
 
             DescMap map = _rider->desc();
@@ -87,8 +90,9 @@ class TrackApp: public Platform::Application {
 
     private:
         Rider* riderFactory();
-        void loadTrack();
-        void loadRiders();
+        void loadTrack(const toml::value &config);
+        void loadRiders(const toml::value &config);
+        void loadRace();
 
         void updateRiders(double dt);
         void drawEvent() override;
@@ -99,20 +103,23 @@ class TrackApp: public Platform::Application {
         void mouseScrollEvent(MouseScrollEvent& event) override;
 
         Timeline timeline;
+        double _time_scaling;
 
         Track* _track;
         std::vector<int> _rider_ids;
 
         std::map<int, Rider*> _riders;
-        std::map<int, RiderModel*> _rider_models;
         std::map<int, RiderController*> _rider_controllers;
         RiderInteraction* _rider_interaction;
+
+        Race* _race;
 
         std::vector<Rider3D*> _riders_3d;
 
         Shaders::VertexColor3D _vertexColorShader{NoCreate};
         Shaders::Flat3D _flatShader{NoCreate};
-        GL::Mesh _track_mesh{NoCreate}, _grid{NoCreate}, _rider_mesh{NoCreate};
+        GL::Mesh _track_mesh{NoCreate}, _grid{NoCreate};
+        std::map<int, GL::Mesh> _rider_meshes;
 
         Scene3D _scene;
         SceneGraph::DrawableGroup3D _drawables;
@@ -124,6 +131,9 @@ class TrackApp: public Platform::Application {
         Vector3 _rotationPoint, _translationPoint;
 
         ImGuiIntegration::Context _imgui{NoCreate};
+
+        std::ofstream _status_fifo;
+        void outputStatus();
 };
 
 class VertexColorDrawable: public SceneGraph::Drawable3D {
@@ -156,6 +166,9 @@ class FlatDrawable: public SceneGraph::Drawable3D {
 };
 
 TrackApp::TrackApp(const Arguments& arguments): Platform::Application{arguments, NoCreate} {
+    /* Load TOML config */
+    const auto config = toml::parse("config.toml");
+
     /* Try 8x MSAA, fall back to zero samples if not possible. Enable only 2x
        MSAA if we have enough DPI. */
     {
@@ -181,8 +194,8 @@ TrackApp::TrackApp(const Arguments& arguments): Platform::Application{arguments,
         .scale(Vector3{100.0f});
     new FlatDrawable{*grid, _flatShader, _grid, _drawables};
 
-    loadTrack();
-    loadRiders();
+    loadTrack(config);
+    loadRiders(config);
 
 
 
@@ -207,24 +220,45 @@ TrackApp::TrackApp(const Arguments& arguments): Platform::Application{arguments,
                             GL::Renderer::BlendEquation::Add);
     GL::Renderer::setBlendFunction(GL::Renderer::BlendFunction::SourceAlpha,
                             GL::Renderer::BlendFunction::OneMinusSourceAlpha);
+    loadRace();
 
     timeline.start();
+    _status_fifo.open("status", std::ios::out);
 }
 
 
 void TrackApp::drawEvent() {
     GL::defaultFramebuffer.clear(GL::FramebufferClear::Color|GL::FramebufferClear::Depth);
-    double dt = double(timeline.previousFrameDuration());
+    _time_scaling = 10;
+    double dt = _time_scaling*double(timeline.previousFrameDuration());
     updateRiders(dt);
     for (auto r : _riders_3d) {
-        r->update(dt);
+        r->update();
     }
     _camera->draw(_drawables);
 
     _imgui.newFrame();
     ImGui::SetNextWindowSize(ImVec2(500, 100), ImGuiCond_FirstUseEver);
     ImGui::Begin("App information");
-    ImGui::Text("Hello");
+    if (!_race->is_started()) {
+    if (ImGui::Button("Run race")) {
+        _race->start();
+    }
+    }
+    else if (!_race->is_finished()) {
+        DescMap map = _race->desc();
+        for (auto x: map) {
+            ImGui::Text("%s : %g", x.first.c_str(), x.second);
+        }
+    }
+    else {
+        ImGui::Text("Rankings:");
+        int i = 1;
+        for (auto x : _race->rankings()) {
+            ImGui::Text("%i : Rider %i", i, x);
+            i++;
+        }
+    }
     ImGui::End();
 
     for (auto x: _riders_3d)
@@ -265,23 +299,27 @@ void TrackApp::mouseScrollEvent(MouseScrollEvent& event) {
         }
 }
 
-void TrackApp::loadTrack() {
-    double min_angle = 12 * constants::pi / 180.0; //12 deg
-    double max_angle = 45 * constants::pi / 180.0; //45 deg
-    double track_width = 8; //m
-    double inner_radius = 27; //m
-    double track_length = 250; //m
+void TrackApp::loadTrack(const toml::value &config) {
+    const auto track_config = toml::find(config, "Track");
+    double min_angle = toml::find<double>(track_config, "min_angle");
+    double max_angle = toml::find<double>(track_config, "max_angle");
+    double track_width = toml::find<double>(track_config, "track_width");
+    double inner_radius = toml::find<double>(track_config, "inner_radius");
+    double track_length = toml::find<double>(track_config, "track_length");
+    double finish_line_position = toml::find<double>(track_config, "finish_line_position");
+    size_t n_points = toml::find<size_t>(track_config, "n_points");
 
-    size_t n_points = 100;
-    std::vector<double> track_incline = sine_track_incline(min_angle, max_angle, n_points); 
-    _track = new Track(inner_radius, track_length, track_width, track_incline);
+    std::vector<double> track_incline = sine_track_incline(deg_to_rad(min_angle), deg_to_rad(max_angle), n_points); 
+    _track = new Track(inner_radius, track_length, track_width, track_incline, finish_line_position);
 
     std::vector<VertexColorData> track_mesh_vertices(2*n_points);
-    std::vector<UnsignedByte> track_mesh_indices(6*n_points);
+    std::vector<UnsignedInt> track_mesh_indices(6*n_points);
     Vec2d dh;
     Vec3d xyz;
+    bool flag_finish = false;
     for (size_t i = 0; i < n_points; i++) {
         dh[0] = double(i) / n_points * track_length;
+        std::cout << dh[0]<< std::endl;
 
         dh[1] = 0;
         _track->coord_dh_to_xyz(dh, xyz);
@@ -292,6 +330,19 @@ void TrackApp::loadTrack() {
         _track->coord_dh_to_xyz(dh, xyz);
         track_mesh_vertices[2*i+1].pos = Vector3{float(xyz[0]), float(xyz[1]), float(xyz[2])};
         track_mesh_vertices[2*i+1].color = track_color_up;
+        if (!flag_finish && dh[0] > finish_line_position) {
+            track_mesh_vertices[2*i].color = track_color_finish;
+            track_mesh_vertices[2*i+1].color = track_color_finish;
+            flag_finish = true;
+        }
+        if (i == 0) {
+            track_mesh_vertices[2*i].color = 0xff0000_rgbf;
+            track_mesh_vertices[2*i+1].color = 0xff0000_rgbf;
+        }
+        if (i == n_points/2) {
+            track_mesh_vertices[2*i].color = 0xff0000_rgbf;
+            track_mesh_vertices[2*i+1].color = 0xff0000_rgbf;
+        }
 
         if (i < n_points-1) {
             track_mesh_indices[6*i] = 2*i;
@@ -322,50 +373,121 @@ void TrackApp::loadTrack() {
         .addVertexBuffer(vertex_buffer, 0,
          Shaders::VertexColor3D::Position{},
          Shaders::VertexColor3D::Color3{})
-        .setIndexBuffer(index_buffer, 0, GL::MeshIndexType::UnsignedByte, 0, 6*n_points);
+        .setIndexBuffer(index_buffer, 0, GL::MeshIndexType::UnsignedInt, 0, 6*n_points);
 
     /* Track object */
     auto track = new Object3D{&_scene};
     new VertexColorDrawable{*track, _vertexColorShader, _track_mesh, _drawables};
 }
 
-void TrackApp::loadRiders() {
-    _rider_ids = {0, 1};
-    auto draftingModel = new SimpleConeDrafting(2.0, 25 / 180 * constants::pi);
-    _rider_interaction = new RiderInteraction(draftingModel);
-    _rider_mesh = MeshTools::compile(Primitives::cubeSolid());
+void TrackApp::loadRiders(const toml::value &config) {
+
+    const auto drafting_model_config = toml::find(config, "DraftingModel");
+    const auto drafting_model_type = toml::find<std::string>(drafting_model_config, "type");
+    DraftingModel* drafting_model;
+    std::cout << drafting_model_type << std::endl;
+    if (drafting_model_type.compare("simple_cone_drafting") == 0) {
+        auto slipstream_duration = toml::find<double>(drafting_model_config, "slipstream_duration");
+        auto slipstream_angle = toml::find<double>(drafting_model_config, "slipstream_angle");
+        drafting_model = new SimpleConeDrafting(slipstream_duration, slipstream_angle);
+    }
+    else {
+        throw std::runtime_error("Unknown drafting type");
+    }
+    _rider_interaction = new RiderInteraction(drafting_model);
+
+    const auto riders_config = toml::find(config, "Riders");
+    auto riders_idx = toml::find<std::unordered_map<std::string , toml::value>>(riders_config, "riders");
+    _rider_ids = {};
+    int id  = 0;
+    double CdA, Cxx, mass, air_density;
+    air_density = toml::find<double>(config.at("Physics"), "air_density");
     Rider3D* rider_3d;
-    for (auto id : _rider_ids) {
-        _riders[id] = new Rider(_track, new SimpleRiderPhysics(0.3, 0.001, 1.225, 75));
-        _rider_controllers[id] = new ConstantPower(600);
-        _rider_models[id] = new WPModel(1000, 300);
+    Color3 colors[36]; 
+    for (auto &x: riders_idx) {
+        CdA = toml::find<double>(x.second, "CdA");
+        Cxx = toml::find<double>(x.second, "Cxx");
+        mass = toml::find<double>(x.second, "mass");
+        _rider_ids.push_back(id);
+        _riders[id] = new Rider(_track, new SimpleRiderPhysics(CdA, Cxx, air_density, mass));
+        auto cube = Primitives::cubeSolid();
+        _rider_meshes[id] = MeshTools::compile(cube);
+        int mesh_count  = _rider_meshes[id].count();
+        std::cout << mesh_count << std::endl;
+        auto color = hex_to_color(toml::find<long>(x.second, "color"));
+        for (int i = 0; i < 36; i++) {
+            colors[i] = color;
+        }
+        GL::Buffer colorBuffer;
+        colorBuffer.setData(colors, GL::BufferUsage::StaticDraw);
+        _rider_meshes[id].addVertexBuffer(colorBuffer, 0, Shaders::VertexColor3D::Color3{});
+
+        std::ostringstream ss;
+        ss << "fifo_" << id;
+        std::string fifo_name = ss.str();
+
+        _rider_controllers[id] = new FifoController(fifo_name.c_str());
         _rider_interaction->add_rider(_riders[id]);
         _riders[id]->set_pos_dh({3*id, 3});
 
         rider_3d = new Rider3D(&_scene, _riders[id]);
-        (*rider_3d).scale(Vector3{1.0f});
+        (*rider_3d).scale(Vector3{0.1f});
         (*rider_3d).update();
         _riders_3d.push_back(rider_3d);
-        new VertexColorDrawable{*rider_3d, _vertexColorShader, _rider_mesh, _drawables};
+        new VertexColorDrawable{*rider_3d, _vertexColorShader, _rider_meshes[id], _drawables};
+        id++;
     }
+}
+
+void TrackApp::loadRace() {
+    std::vector<Rider*> riders_vec;
+    for (auto x : _riders) {
+        riders_vec.push_back(x.second);
+    }
+    _race = new Sprint(riders_vec, _track, 4);
+    _race->position_riders();
 }
 
 void TrackApp::updateRiders(double dt) {
     double power, steering, max_power;
+    if (_race->lock_riders()) {
+        return;
+    }
     for (auto id : _rider_ids) {
+        _rider_controllers[id]->update();
         power = _rider_controllers[id]->power();
         steering = _rider_controllers[id]->steering();
-        max_power = _rider_models[id]->maximum_power(dt);
-        if (power > max_power) {
-            power = max_power;
-        }
         _riders[id]->set_power(power);
         _riders[id]->set_steering(steering);
         _riders[id]->update(dt);
     }
     _rider_interaction->update();
-    for (auto id : _rider_ids) {
-        _rider_models[id]->update(_riders[id]->power(), dt);
+    _race->update(dt);
+    outputStatus();
+}
+
+void TrackApp::outputStatus() {
+    _status_fifo << "timestamp " << _time_scaling * timeline.previousFrameTime() << std::endl;
+    int i = 0;
+    for (auto idx: _rider_ids) {
+        _status_fifo << "rider " << idx << std::endl; 
+        _status_fifo << "d " << _riders[idx]->pos_dh()[0] << std::endl;
+        _status_fifo << "h " << _riders[idx]->pos_dh()[1] << std::endl;
+        _status_fifo << "velocity " << _riders[idx]->velocity() << std::endl;
+        _status_fifo << "power " << _riders[idx]->power() << std::endl;
+        _status_fifo << "dist " << _race->cumulative_distance()[i] << std::endl;
+        i++;
+    }
+    _status_fifo << "race" << std::endl;
+    if (!_race->is_finished()) {
+    _status_fifo << "on" << std::endl; 
+    }
+    else {
+    _status_fifo << "rankings ";
+        for (auto x : _race->rankings()) {
+            _status_fifo << x << " ";
+        }
+        _status_fifo << std::endl;
     }
 }
 

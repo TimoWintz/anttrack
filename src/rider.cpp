@@ -1,7 +1,11 @@
-#include "rider.h"
-#include "constants.h"
 #include <iostream>
 #include <numeric>
+#include <istream>
+#include <chrono>
+#include <math.h>       /* isnan, sqrt */
+
+#include "rider.h"
+#include "constants.h"
 
 static const double max_acceleration = 5*constants::g;
 size_t Rider::_next_id = 0;
@@ -13,17 +17,46 @@ double SimpleRiderPhysics::moving_resistance(double velocity) {
 double SimpleRiderPhysics::gravity_acceleration(double gradient) {
     return gradient * constants::g;
 }
-double SimpleRiderPhysics::acceleration(double velocity, double gradient, double power, double slipstream_velocity) {
-    double acceleration = power / velocity / mass - moving_resistance(velocity - slipstream_velocity) / mass - gravity_acceleration(gradient);
-    if (acceleration > max_acceleration)
-        return max_acceleration;
-    return acceleration;
+double SimpleRiderPhysics::delta_v(double velocity, double gradient, double power, double dt, double slipstream_velocity) {
+    double backwards_acceleration = moving_resistance(velocity - slipstream_velocity) / mass + gravity_acceleration(gradient);
+    double a = 1;
+    double b = velocity - backwards_acceleration*dt;
+    double c = - power*dt / mass + backwards_acceleration*velocity*dt;
+    double delta = b*b - 4*a*c;
+    if (delta < 0)
+        return -velocity;
+    double res = (-b + std::sqrt(delta)) / 2;
+    return res;
 }  
 
 double SimpleRiderPhysics::current_power(double velocity, double gradient, double acceleration, double slipstream_velocity) {
     return acceleration * velocity * mass + moving_resistance(velocity - slipstream_velocity) * velocity + 
         gravity_acceleration(gradient) * velocity * mass;
 }  
+
+
+void FifoController::update() {
+    int n = _fifo.readsome(_buffer + _buffer_index, 100-_buffer_index);
+    for (int i = _buffer_index; i < _buffer_index + n; i++) {
+        if (_buffer[i] == '\n') {
+            std::cout << _line_stream.str() << std::endl;
+            _line_stream >> _control >> _value;
+            std::cout << "c = " << _control << ", v = " << _value << std::endl;
+            _line_stream.clear();
+            if (_control == 'p') {
+                _power = _value;
+            }
+            if (_control == 's') {
+                _steering= _value;
+            }
+        }
+        _line_stream << _buffer[i];
+    }
+    _buffer_index += n;
+    if (_buffer_index >= 100) {
+        _buffer_index = 0;
+    }
+}
 
 Rider::Rider(Track* track, RiderPhysics* rider_physics) : 
     _track(track), _rider_physics(rider_physics),  _slipstream_velocity(0.0) {
@@ -32,6 +65,7 @@ Rider::Rider(Track* track, RiderPhysics* rider_physics) :
         _track->coord_dh_to_xyz(_pos_dh, _pos_xyz);
         _velocity = 0;
         _power = 0;
+        _dl = 0;
         _max_velocity = 1000;
         _id = _next_id++;
 }
@@ -41,10 +75,10 @@ static double eps = 0.0001;
 void Rider::update(double dt) {
     if (dt == 0)
         return;
-    double dl = dt * _velocity;
+    _dl = dt * _velocity;
     double old_z = _pos_xyz[2];
 
-    _track->update_position(_pos_dh, dl, _steering);
+    _track->update_position(_pos_dh, _dl, _steering);
     _track->coord_dh_to_xyz(_pos_dh, _pos_xyz);
     _track->direction_vector(_pos_dh, _direction);
 
@@ -53,14 +87,14 @@ void Rider::update(double dt) {
     else
         _gradient = (_pos_xyz[2] - old_z) / _velocity / dt;
 
-    double acceleration = _rider_physics->acceleration(_velocity, _gradient, _power, _slipstream_velocity);
-    double tmp_velocity = _velocity + dt * acceleration;
+    double delta_v = _rider_physics->delta_v(_velocity, _gradient, _power, dt, _slipstream_velocity);
+    double tmp_velocity = _velocity + delta_v;
     if (tmp_velocity < 0)
         tmp_velocity = 0;
     if (tmp_velocity > _max_velocity) {
         tmp_velocity = _max_velocity;
     }
-    acceleration = (tmp_velocity - _velocity) / dt;
+    double acceleration = (tmp_velocity - _velocity) / dt;
     _velocity = tmp_velocity;
     if (_velocity > 0)
         _power = _rider_physics->current_power(_velocity, _gradient, acceleration, _slipstream_velocity);
@@ -94,22 +128,6 @@ DescMap Rider::desc() {
     return map;
 }
 
-double WPModel::maximum_power(double dt) {
-    double P = _Wpbal / dt + _CP;
-    if (P < 0)
-        return 0.;
-    return P;
-}
-
-void WPModel::update(double P, double dt) {
-    if (P > _CP) 
-        _Wpbal += (_CP - P) * dt; 
-    else
-        _Wpbal += (_CP - P) * (_Wp - _Wpbal) / _Wp * dt;
-    if (_Wpbal > _Wp)
-        _Wpbal = _Wp;
-}
-
 double SimpleConeDrafting::slipstream_velocity(std::vector<PosVel> positions_and_velocities,
                                    const Vec3d& position) {
     auto cmp = [position](const PosVel& a, const PosVel& b) -> bool {
@@ -129,6 +147,9 @@ double SimpleConeDrafting::slipstream_velocity(std::vector<PosVel> positions_and
         // if (ratio < 0)
         //     continue;
         vel = pv.second.norm();
+        if (vel == 0) {
+            continue;
+        }
         ratio = _max_multiplier;
         ratio *= (_duration - dist / vel / vel) / _duration;
         // slipstream_velocity = dist;
@@ -146,15 +167,16 @@ void RiderInteraction::update() {
     for (size_t i = 0; i < _riders.size(); i++) {
         _positions_and_velocities[i].first = _riders[i]->pos_xyz();
         _positions_and_velocities[i].second = _riders[i]->velocity_vector();
+        _riders[i]->set_max_velocity(std::numeric_limits<double>::max());
         for (size_t j=0; j < _riders.size(); j++) {
             if (i == j)
                 continue;
             auto dir_i = _riders[i]->direction_vector();
             auto signed_dist = dir_i.dot(_riders[j]->pos_xyz() - _riders[i]->pos_xyz());
-            if (signed_dist > 0 && signed_dist < constants::rider_length) 
+            auto side_dist = std::abs(_riders[j]->pos_dh()[1] - _riders[i]->pos_dh()[1]);
+            if (signed_dist > 0 && signed_dist < _riders[j]->length() && 
+                    _riders[i]->max_velocity() > _riders[j]->velocity() && side_dist < _riders[j]->width()) 
                 _riders[i]->set_max_velocity(_riders[j]->velocity());
-            else
-                _riders[i]->set_max_velocity(std::numeric_limits<double>::max());
         }
     }
     for (auto rider : _riders) {

@@ -20,11 +20,12 @@ class Track
         std::vector<double> track_incline;
 
         double straight_length;
+        double _finish_line_position;
     public:
         double get_length() { return track_length; };
         double get_width() { return track_width; };
 
-        Track(double inner_radius, double track_length, double track_width, std::vector<double> track_incline);
+        Track(double inner_radius, double track_length, double track_width, std::vector<double> track_incline, double finish_line_position);
         double interp_track_incline(double d);
         void coord_xyz_to_dh(const Vec3d& xyz, Vec2d& dh);
         void coord_dh_to_xyz(const Vec2d& dh, Vec3d& xyz);
@@ -35,6 +36,7 @@ class Track
         TrackSegment track_segment(const Vec2d& dh);
 
         void update_position(Vec2d& dh, double dl, double angle);
+        double finish_line_position() {return _finish_line_position;};
 };
 
 std::vector<double> sine_track_incline(double min_incline, double max_incline, int n_points);
