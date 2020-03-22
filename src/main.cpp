@@ -110,6 +110,7 @@ class TrackApp: public Platform::Application {
 
         std::map<int, Rider*> _riders;
         std::map<int, RiderController*> _rider_controllers;
+
         RiderInteraction* _rider_interaction;
 
         Race* _race;
@@ -134,6 +135,9 @@ class TrackApp: public Platform::Application {
 
         std::ofstream _status_fifo;
         void outputStatus();
+
+        bool _autostart;
+        bool _exit_on_finish;
 };
 
 class VertexColorDrawable: public SceneGraph::Drawable3D {
@@ -224,6 +228,13 @@ TrackApp::TrackApp(const Arguments& arguments): Platform::Application{arguments,
 
     timeline.start();
     _status_fifo.open("status", std::ios::out);
+
+    _autostart = toml::find<bool>(config.at("General"), "autostart");
+    _exit_on_finish = toml::find<bool>(config.at("General"), "exit_on_finish");
+
+    if (_autostart) {
+        _race->start();
+    }
 }
 
 
@@ -273,6 +284,8 @@ void TrackApp::drawEvent() {
     GL::Renderer::disable(GL::Renderer::Feature::DepthTest);
 
     _imgui.drawFrame();
+    if (_race->is_finished() && _exit_on_finish)
+        Sdl2Application::exit();
 
     swapBuffers();
     timeline.nextFrame();
@@ -389,7 +402,7 @@ void TrackApp::loadRiders(const toml::value &config) {
     if (drafting_model_type.compare("simple_cone_drafting") == 0) {
         auto slipstream_duration = toml::find<double>(drafting_model_config, "slipstream_duration");
         auto slipstream_angle = toml::find<double>(drafting_model_config, "slipstream_angle");
-        drafting_model = new SimpleConeDrafting(slipstream_duration, slipstream_angle);
+        drafting_model = new SimpleConeDrafting(slipstream_duration, deg_to_rad(slipstream_angle));
     }
     else {
         throw std::runtime_error("Unknown drafting type");
@@ -449,7 +462,7 @@ void TrackApp::loadRace() {
 }
 
 void TrackApp::updateRiders(double dt) {
-    double power, steering, max_power;
+    double power, steering;
     if (_race->lock_riders()) {
         return;
     }

@@ -128,6 +128,22 @@ DescMap Rider::desc() {
     return map;
 }
 
+// double WPModel::maximum_power(double dt) {
+//     double P = _Wpbal / dt + _CP;
+//     if (P < 0)
+//         return 0.;
+//     return P;
+// }
+
+// void WPModel::update(double P, double dt) {
+//     if (P > _CP) 
+//         _Wpbal += (_CP - P) * dt; 
+//     else
+//         _Wpbal += (_CP - P) * (_Wp - _Wpbal) / _Wp * dt;
+//     if (_Wpbal > _Wp)
+//         _Wpbal = _Wp;
+// }
+
 double SimpleConeDrafting::slipstream_velocity(std::vector<PosVel> positions_and_velocities,
                                    const Vec3d& position) {
     auto cmp = [position](const PosVel& a, const PosVel& b) -> bool {
@@ -142,15 +158,15 @@ double SimpleConeDrafting::slipstream_velocity(std::vector<PosVel> positions_and
         dist = relpos.dot(pv.second);
         if (dist <= 0)
             continue;
-        // angle = std::acos(dist / relpos.norm());
-        // ratio = _max_multiplier * (_angle - angle);
-        // if (ratio < 0)
-        //     continue;
+        angle = std::acos(dist / relpos.norm() / pv.second.norm());
+        ratio = _max_multiplier * (_angle - angle) / _angle;
+        if (ratio < 0)
+            continue;
         vel = pv.second.norm();
         if (vel == 0) {
             continue;
         }
-        ratio = _max_multiplier;
+        // ratio = _max_multiplier;
         ratio *= (_duration - dist / vel / vel) / _duration;
         // slipstream_velocity = dist;
         if (ratio < 0)
@@ -158,8 +174,6 @@ double SimpleConeDrafting::slipstream_velocity(std::vector<PosVel> positions_and
         slipstream_velocity += (pv.second.norm() - slipstream_velocity) * ratio;
         // slipstream_velocity = dist;
     }
-    // std::cout << "vel  = " << vel << std::endl;
-    // std::cout << slipstream_velocity << std::endl;
     return slipstream_velocity;
 }
 
