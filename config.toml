@@ -1,0 +1,42 @@
+[General]
+autostart = true
+exit_on_finish = true
+
+[Physics]
+gravity_constant = 9.81
+air_density = 1.225
+
+[DraftingModel]
+type = "simple_cone_drafting"
+slipstream_duration = 2.0
+slipstream_angle = 45.0
+
+[Track]
+track_length = 250.0
+inner_radius = 27.0
+track_width = 8.0
+min_angle = 12.0
+max_angle = 45.0
+finish_line_position = 140.0
+n_points = 500
+
+[Riders]
+bike_length = 2.0
+
+[Riders.riders.rider0]
+x = 0
+CdA = 0.3
+Cxx = 0.001
+mass = 75.0
+color = 0xff0000
+
+[Riders.riders.rider1]
+x = 0
+CdA = 0.3
+Cxx = 0.001
+mass = 75.0
+color = 0xffff00
+
+[Race]
+type = "individual_pursuit"
+
