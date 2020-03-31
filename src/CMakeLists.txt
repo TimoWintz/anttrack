@@ -4,7 +4,7 @@ find_package(Magnum REQUIRED GL Sdl2Application
     SceneGraph
     Shaders)
 find_package(MagnumIntegration REQUIRED ImGui Eigen)
-find_package(ImGui REQUIRED Sources)
+find_package(imgui REQUIRED Sources)
 
 set_directory_properties(PROPERTIES CORRADE_USE_PEDANTIC_FLAGS ON)
 include_directories(../toml11)

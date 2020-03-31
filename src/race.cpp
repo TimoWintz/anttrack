@@ -3,6 +3,8 @@
 void Sprint::position_riders() {
     _riders[0]->set_pos_dh({_track->finish_line_position() + 1 , 0});
     _riders[1]->set_pos_dh({_track->finish_line_position(), 1});
+    _is_started = false;
+    _is_finished = false;
 }
 
 void Sprint::start() {
@@ -39,15 +41,16 @@ void Sprint::update(double dt) {
         flag = false;
         rider_pos = _riders[i]->pos_dh()[0];
         if (rider_pos >= finish_line && rider_pos - _riders[i]->dl() < finish_line) {
-            std::cout << _riders[i]->dl();
             _current_n_laps[i] ++;
             _cumulative_time[i] = _current_time - (rider_pos - finish_line) / _riders[i]->velocity() / dt;
         }
     }
-    if ((_current_n_laps[0] > _current_n_laps[0]) || ((_current_n_laps[0] == _current_n_laps[0]) && _cumulative_time[0] < _cumulative_time[1]))
+    if (_is_finished)
+        return;
+    if ((_current_n_laps[0] > _current_n_laps[1]) || ((_current_n_laps[0] == _current_n_laps[1]) && _cumulative_time[0] < _cumulative_time[1]))
         _rankings = {0, 1};
     else
         _rankings = {1,0};
-    _is_finished = flag;
+    _is_finished = (_current_n_laps[0] == _n_laps) || (_current_n_laps[1] == _n_laps);
     return;
 }

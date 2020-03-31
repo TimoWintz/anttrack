@@ -7,7 +7,7 @@
 #include "rider.h"
 #include "constants.h"
 
-static const double max_acceleration = 5*constants::g;
+// static const double max_acceleration = 5*constants::g;
 size_t Rider::_next_id = 0;
 
 double SimpleRiderPhysics::moving_resistance(double velocity) {
@@ -18,6 +18,8 @@ double SimpleRiderPhysics::gravity_acceleration(double gradient) {
     return gradient * constants::g;
 }
 double SimpleRiderPhysics::delta_v(double velocity, double gradient, double power, double dt, double slipstream_velocity) {
+    if (slipstream_velocity > velocity)
+        slipstream_velocity = velocity;
     double backwards_acceleration = moving_resistance(velocity - slipstream_velocity) / mass + gravity_acceleration(gradient);
     double a = 1;
     double b = velocity - backwards_acceleration*dt;
@@ -30,33 +32,11 @@ double SimpleRiderPhysics::delta_v(double velocity, double gradient, double powe
 }  
 
 double SimpleRiderPhysics::current_power(double velocity, double gradient, double acceleration, double slipstream_velocity) {
+    if (slipstream_velocity > velocity)
+        slipstream_velocity = velocity;
     return acceleration * velocity * mass + moving_resistance(velocity - slipstream_velocity) * velocity + 
         gravity_acceleration(gradient) * velocity * mass;
 }  
-
-
-void FifoController::update() {
-    int n = _fifo.readsome(_buffer + _buffer_index, 100-_buffer_index);
-    for (int i = _buffer_index; i < _buffer_index + n; i++) {
-        if (_buffer[i] == '\n') {
-            std::cout << _line_stream.str() << std::endl;
-            _line_stream >> _control >> _value;
-            std::cout << "c = " << _control << ", v = " << _value << std::endl;
-            _line_stream.clear();
-            if (_control == 'p') {
-                _power = _value;
-            }
-            if (_control == 's') {
-                _steering= _value;
-            }
-        }
-        _line_stream << _buffer[i];
-    }
-    _buffer_index += n;
-    if (_buffer_index >= 100) {
-        _buffer_index = 0;
-    }
-}
 
 Rider::Rider(Track* track, RiderPhysics* rider_physics) : 
     _track(track), _rider_physics(rider_physics),  _slipstream_velocity(0.0) {
@@ -75,12 +55,19 @@ static double eps = 0.0001;
 void Rider::update(double dt) {
     if (dt == 0)
         return;
-    _dl = dt * _velocity;
     double old_z = _pos_xyz[2];
+    double old_d = _pos_dh[0];
 
-    _track->update_position(_pos_dh, _dl, _steering);
+
+    _track->update_position(_pos_dh,  dt * _velocity, _steering);
     _track->coord_dh_to_xyz(_pos_dh, _pos_xyz);
     _track->direction_vector(_pos_dh, _direction);
+
+    _dl = _pos_dh[0] - old_d;
+    if (_dl > _track->get_length())
+        _dl -= _track->get_length();
+    if (_dl < 0)
+        _dl += _track->get_length();
 
     if (_velocity < eps)
         _gradient = 0;
@@ -94,12 +81,12 @@ void Rider::update(double dt) {
     if (tmp_velocity > _max_velocity) {
         tmp_velocity = _max_velocity;
     }
-    double acceleration = (tmp_velocity - _velocity) / dt;
+    // double acceleration = (tmp_velocity - _velocity) / dt;
     _velocity = tmp_velocity;
-    if (_velocity > 0)
-        _power = _rider_physics->current_power(_velocity, _gradient, acceleration, _slipstream_velocity);
-    if (_power < 0)
-        _power = 0;
+    // if (_velocity > 0)
+        // _power = _rider_physics->current_power(_velocity, _gradient, acceleration, _slipstream_velocity);
+    // if (_power < 0)
+        // _power = 0;
 }
 
 void Rider::set_pos_dh(const Vec2d& dh){

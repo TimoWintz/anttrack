@@ -17,6 +17,7 @@ class Race {
         virtual std::vector<int> rankings() = 0; 
         virtual std::vector<float> timings() = 0;
         virtual std::vector<float> cumulative_distance() = 0;
+        virtual std::vector<float> distance_to_finish() = 0;
         virtual DescMap desc() = 0;
 };
 
@@ -28,6 +29,8 @@ class Sprint: public Race {
     bool _is_started;
     float _current_time;
 
+    float _total_distance;
+
     std::vector<int> _rankings;
 
     std::array<int, 2> _current_n_laps;
@@ -36,7 +39,7 @@ class Sprint: public Race {
 
     public:
         Sprint(std::vector<Rider*> riders, Track* track, int n_laps) : _riders(riders), _track(track), _n_laps(n_laps),
-            _is_finished(false), _is_started(false) {
+            _is_finished(false), _is_started(false) , _total_distance(n_laps * track->get_length()){
             if (riders.size() != 2) {
                 throw std::runtime_error("Sprint is for 2 riders only.");
             }
@@ -51,6 +54,8 @@ class Sprint: public Race {
         std::vector<float> timings() {return std::vector<float>({_cumulative_time[0], _cumulative_time[1]});};
         DescMap desc();
         std::vector<float> cumulative_distance() {return {_cumulative_distance[0], _cumulative_distance[1]};};
+        std::vector<float> distance_to_finish() {return {_total_distance - _cumulative_distance[0], 
+                                                        _total_distance - _cumulative_distance[1]};};
 };
 
 #endif // src/race_h_INCLUDED
