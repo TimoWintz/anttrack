@@ -1,3 +1,9 @@
 [submodule "toml11"]
 	path = toml11
 	url = https://github.com/ToruNiina/toml11
+[submodule "mio"]
+	path = mio
+	url = https://github.com/mandreyel/mio
+[submodule "json"]
+	path = json
+	url = https://github.com/nlohmann/json

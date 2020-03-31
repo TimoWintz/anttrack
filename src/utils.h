@@ -1,6 +1,9 @@
 #ifndef UTILS_H
 #define UTILS_H
 #include <cmath>
+#include <iostream>
+#include <fstream>
+
 #include <Magnum/Image.h>
 #include <Magnum/GL/Buffer.h>
 #include <Magnum/GL/DefaultFramebuffer.h>
@@ -23,14 +26,24 @@
 #include <Magnum/Timeline.h>
 #include <Magnum/ImGuiIntegration/Context.hpp>
 #include <Magnum/Trade/MeshData3D.h>
-const double pi = std::atan(1)*4;
-static double deg_to_rad(double angle_deg) {
-    return angle_deg / 180.0 * pi;
+const float pi = (float) std::atan(1)*4;
+inline static float deg_to_rad(float angle_deg) {
+    return angle_deg / 180.0f * pi;
 }
-static Magnum::Color3 hex_to_color(long x) {
+inline static Magnum::Color3 hex_to_color(long x) {
     float red = float((x / 256 / 256) % 256) / 256;
     float green = float((x / 256) % 256) / 256;
     float blue = float(x % 256) / 256;
     return Magnum::Color3{red, green, blue};
 }
+
+inline void allocate_file(char* fname, int page_size) {
+    // Fill buffer, then write it to file.
+    const int file_size = 4 * page_size - 250; // 16134, if page size is 4KiB
+    std::string buffer(file_size, 0);
+    std::ofstream file(fname);
+    file << buffer;
+    file.close();
+}
+
 #endif

@@ -5,141 +5,91 @@
 #include <math.h>       /* isnan, sqrt */
 
 #include "rider.h"
-#include "constants.h"
+#include "gamelogic.h"
 
-// static const double max_acceleration = 5*constants::g;
-size_t Rider::_next_id = 0;
-
-double SimpleRiderPhysics::moving_resistance(double velocity) {
-    return 0.5 * rho * CdA * velocity * velocity + mass* Cxx * constants::g;
+float RiderPhysics::moving_resistance(float velocity) const {
+    return 0.5f * rho * CdA * velocity * velocity + mass* Cxx * 9.81f;
 }
 
-double SimpleRiderPhysics::gravity_acceleration(double gradient) {
-    return gradient * constants::g;
+float RiderPhysics::gravity_acceleration(float gradient) const {
+    return gradient * 9.81f;
 }
-double SimpleRiderPhysics::delta_v(double velocity, double gradient, double power, double dt, double slipstream_velocity) {
+float RiderPhysics::delta_v(float velocity, float gradient, float power, float dt, float slipstream_velocity) const {
     if (slipstream_velocity > velocity)
         slipstream_velocity = velocity;
-    double backwards_acceleration = moving_resistance(velocity - slipstream_velocity) / mass + gravity_acceleration(gradient);
-    double a = 1;
-    double b = velocity - backwards_acceleration*dt;
-    double c = - power*dt / mass + backwards_acceleration*velocity*dt;
-    double delta = b*b - 4*a*c;
+    float backwards_acceleration = moving_resistance(velocity - slipstream_velocity) / mass + gravity_acceleration(gradient);
+    float a = 1;
+    float b = velocity - backwards_acceleration*dt;
+    float c = - power*dt / mass + backwards_acceleration*velocity*dt;
+    float delta = b*b - 4*a*c;
     if (delta < 0)
         return -velocity;
-    double res = (-b + std::sqrt(delta)) / 2;
+    float res = (-b + std::sqrt(delta)) / 2;
     return res;
 }  
 
-double SimpleRiderPhysics::current_power(double velocity, double gradient, double acceleration, double slipstream_velocity) {
+float RiderPhysics::current_power(float velocity, float gradient, float acceleration, float slipstream_velocity) const {
     if (slipstream_velocity > velocity)
         slipstream_velocity = velocity;
     return acceleration * velocity * mass + moving_resistance(velocity - slipstream_velocity) * velocity + 
         gravity_acceleration(gradient) * velocity * mass;
 }  
 
-Rider::Rider(Track* track, RiderPhysics* rider_physics) : 
-    _track(track), _rider_physics(rider_physics),  _slipstream_velocity(0.0) {
-        _pos_dh[0] = 0;
-        _pos_dh[1] = 0;
-        _track->coord_dh_to_xyz(_pos_dh, _pos_xyz);
-        _velocity = 0;
-        _power = 0;
-        _dl = 0;
-        _max_velocity = 1000;
-        _id = _next_id++;
-}
 
-static double eps = 0.0001;
+static float eps = 0.0001;
 
-void Rider::update(double dt) {
+void Rider::update_velocity(const RiderPhysics& physics, float dt, float power, float gradient, float drafting_coefficient) 
+{
     if (dt == 0)
         return;
-    double old_z = _pos_xyz[2];
-    double old_d = _pos_dh[0];
-
+    float delta_v = physics.delta_v(_velocity, gradient, power, dt, drafting_coefficient);
+    _velocity += delta_v;
+    if (_velocity < 0)
+        _velocity = 0;
+    
+}
+/* void Rider::update(float dt) {
+    if (dt == 0)
+        return;
+    float old_z = _pos_xyz[2];
 
     _track->update_position(_pos_dh,  dt * _velocity, _steering);
     _track->coord_dh_to_xyz(_pos_dh, _pos_xyz);
     _track->direction_vector(_pos_dh, _direction);
-
-    _dl = _pos_dh[0] - old_d;
-    if (_dl > _track->get_length())
-        _dl -= _track->get_length();
-    if (_dl < 0)
-        _dl += _track->get_length();
 
     if (_velocity < eps)
         _gradient = 0;
     else
         _gradient = (_pos_xyz[2] - old_z) / _velocity / dt;
 
-    double delta_v = _rider_physics->delta_v(_velocity, _gradient, _power, dt, _slipstream_velocity);
-    double tmp_velocity = _velocity + delta_v;
+    float delta_v = _rider_physics->delta_v(_velocity, _gradient, _power, dt, _slipstream_velocity);
+    float tmp_velocity = _velocity + delta_v;
     if (tmp_velocity < 0)
         tmp_velocity = 0;
     if (tmp_velocity > _max_velocity) {
         tmp_velocity = _max_velocity;
     }
-    // double acceleration = (tmp_velocity - _velocity) / dt;
     _velocity = tmp_velocity;
-    // if (_velocity > 0)
-        // _power = _rider_physics->current_power(_velocity, _gradient, acceleration, _slipstream_velocity);
-    // if (_power < 0)
-        // _power = 0;
+}
+ */
+std::map<int, float> DraftingModel::drafting_coefficients(const std::map<int, Rider>& riders)
+{
+    std::map<int, float> res;
+    for (auto id : GameLogic::get().rider_ids()) {
+        res[id] = 0;
+    }
+    return res;
 }
 
-void Rider::set_pos_dh(const Vec2d& dh){
-        _pos_dh[0] = dh[0];
-        _pos_dh[1] = dh[1];
-        _track->coord_dh_to_xyz(_pos_dh, _pos_xyz);
-}
-void Rider::set_pos_xyz(const Vec3d& xyz){
-        _pos_xyz[0] = xyz[0];
-        _pos_xyz[1] = xyz[1];
-        _pos_xyz[2] = xyz[2];
-        _track->coord_xyz_to_dh(_pos_xyz, _pos_dh);
-}
-
-DescMap Rider::desc() {
-    DescMap map = DescMap();
-    map.insert(DescMap::value_type("speed (km/h)", _velocity * 3.6));
-    map.insert(DescMap::value_type("power (W)", _power));
-    map.insert(DescMap::value_type("distance (m)", _pos_dh[0]));
-    map.insert(DescMap::value_type("height (m)", _pos_dh[1]));
-    map.insert(DescMap::value_type("slipstream vel (km/h)", _slipstream_velocity * 3.6));
-    map.insert(DescMap::value_type("vel x (km/h)", velocity_vector()[0] * 3.6));
-    map.insert(DescMap::value_type("vel y (km/h)", velocity_vector()[1] * 3.6));
-    map.insert(DescMap::value_type("pos x (m)", pos_xyz()[0]));
-    map.insert(DescMap::value_type("pos y (m)", pos_xyz()[1]));
-    return map;
-}
-
-// double WPModel::maximum_power(double dt) {
-//     double P = _Wpbal / dt + _CP;
-//     if (P < 0)
-//         return 0.;
-//     return P;
-// }
-
-// void WPModel::update(double P, double dt) {
-//     if (P > _CP) 
-//         _Wpbal += (_CP - P) * dt; 
-//     else
-//         _Wpbal += (_CP - P) * (_Wp - _Wpbal) / _Wp * dt;
-//     if (_Wpbal > _Wp)
-//         _Wpbal = _Wp;
-// }
-
-double SimpleConeDrafting::slipstream_velocity(std::vector<PosVel> positions_and_velocities,
-                                   const Vec3d& position) {
+/* float DraftingModel::slipstream_velocity(std::vector<PosVel> positions_and_velocities,
+                                   const Vec3f& position) {
     auto cmp = [position](const PosVel& a, const PosVel& b) -> bool {
         return (a.first - position).dot(a.second / a.second.norm()) < (b.first - position).dot(b.second / b.second.norm());
     };
     std::sort(positions_and_velocities.begin(), positions_and_velocities.end(), cmp);
-    double slipstream_velocity = 0.0;
-    Vec3d relpos;
-    double angle, dist, ratio, vel;
+    float slipstream_velocity = 0.0;
+    Vec3f relpos;
+    float angle, dist, ratio, vel;
     for (auto pv: positions_and_velocities) {
         relpos = pv.first - position;
         dist = relpos.dot(pv.second);
@@ -163,12 +113,12 @@ double SimpleConeDrafting::slipstream_velocity(std::vector<PosVel> positions_and
     }
     return slipstream_velocity;
 }
-
-void RiderInteraction::update() {
+ */
+/* void RiderInteraction::update() {
     for (size_t i = 0; i < _riders.size(); i++) {
         _positions_and_velocities[i].first = _riders[i]->pos_xyz();
         _positions_and_velocities[i].second = _riders[i]->velocity_vector();
-        _riders[i]->set_max_velocity(std::numeric_limits<double>::max());
+        _riders[i]->set_max_velocity(std::numeric_limits<float>::max());
         for (size_t j=0; j < _riders.size(); j++) {
             if (i == j)
                 continue;
@@ -181,7 +131,7 @@ void RiderInteraction::update() {
         }
     }
     for (auto rider : _riders) {
-        double slipstream_velocity = _drafting_model->slipstream_velocity(_positions_and_velocities, rider->pos_xyz());
+        float slipstream_velocity = _drafting_model->slipstream_velocity(_positions_and_velocities, rider->pos_xyz());
         rider->set_slipstream_velocity(slipstream_velocity);
     }
-}
+} */

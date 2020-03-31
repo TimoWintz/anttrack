@@ -3,15 +3,16 @@ find_package(Magnum REQUIRED GL Sdl2Application
     Primitives
     SceneGraph
     Shaders)
-find_package(MagnumIntegration REQUIRED ImGui Eigen)
-find_package(imgui REQUIRED Sources)
+find_package(MagnumIntegration REQUIRED Eigen)
+find_package(cpprestsdk REQUIRED)
 
 set_directory_properties(PROPERTIES CORRADE_USE_PEDANTIC_FLAGS ON)
 include_directories(../toml11)
+include_directories(../mio/single_include)
+include_directories(../json/include)
 
-add_executable(CycloTron main.cpp track.cpp rider.cpp race.cpp)
+add_executable(CycloTron main.cpp gamelogic.cpp track.cpp rider.cpp race.cpp )
 target_link_libraries(CycloTron PRIVATE
-    pthread
     Magnum::Application
     Magnum::GL
     Magnum::Magnum
@@ -19,8 +20,7 @@ target_link_libraries(CycloTron PRIVATE
     Magnum::Primitives
     Magnum::SceneGraph
     Magnum::Shaders
-    MagnumIntegration::ImGui
-    MagnumIntegration::Eigen)
+    MagnumIntegration::Eigen) 
 
 # Make the executable a default target to build & run in Visual Studio
 set_property(DIRECTORY ${PROJECT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT CycloTron)

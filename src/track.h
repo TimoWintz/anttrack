@@ -5,40 +5,42 @@
 #include <vector>
 #include <Eigen/Dense>
 
-typedef Eigen::Vector3d Vec3d;
-typedef Eigen::Vector2d Vec2d;
-typedef std::pair<Vec3d, Vec3d> PosVel;
+typedef Eigen::Vector3f Vec3f;
+typedef Eigen::Vector2f Vec2f;
+typedef std::pair<Vec3f, Vec3f> PosVel;
 
 enum class TrackSegment { Straight1, Bank1, Straight2, Bank2 };
 
 class Track
 {
     protected:
-        double inner_radius;
-        double track_length;
-        double track_width;
-        std::vector<double> track_incline;
+        float _inner_radius;
+        float _length;
+        float _width;
+        std::vector<float> _incline;
 
-        double straight_length;
-        double _finish_line_position;
+        float _straight_length;
+        float _finish_line_position;
     public:
-        double get_length() { return track_length; };
-        double get_width() { return track_width; };
+        float length() const { return _length; };
+        float width() const { return _width; };
+        float finish_line_position() const {return _finish_line_position;} 
 
-        Track(double inner_radius, double track_length, double track_width, std::vector<double> track_incline, double finish_line_position);
-        double interp_track_incline(double d);
-        void coord_xyz_to_dh(const Vec3d& xyz, Vec2d& dh);
-        void coord_dh_to_xyz(const Vec2d& dh, Vec3d& xyz);
-        void direction_vector(const Vec2d& dh, Vec3d& direction);
-        double velocity_scaling(const Vec2d& dh);
+        Track() { };
+        void configure(float inner_radius, float track_length, float track_width, std::vector<float> track_incline, float finish_line_position);
+        
+        float interpolate_incline(float d) const;
+        void coord_xyz_to_dh(const Vec3f& xyz, Vec2f& dh) const;
+        void coord_dh_to_xyz(const Vec2f& dh, Vec3f& xyz) const;
+        void direction_vector(const Vec2f& dh, Vec3f& direction) const;
+        float velocity_scaling(const Vec2f& dh) const;
 
-        TrackSegment track_segment(const Vec3d& xyz);
-        TrackSegment track_segment(const Vec2d& dh);
+        TrackSegment track_segment(const Vec3f& xyz) const;
+        TrackSegment track_segment(const Vec2f& dh) const;
 
-        void update_position(Vec2d& dh, double dl, double angle);
-        double finish_line_position() {return _finish_line_position;};
+        void update_position(Vec2f& dh, float dl, float angle);
 };
 
-std::vector<double> sine_track_incline(double min_incline, double max_incline, int n_points);
+std::vector<float> sine_track_incline(float min_incline, float max_incline, int n_points);
 
 #endif

@@ -5,43 +5,41 @@ import os
 import subprocess
 import atexit
 import torch
-from vanillaDQN.dqn import DQNAgent
-from common.utils import mini_batch_train
-
-class ReplayMemory(object):
-    def __init__(self, capacity):
-        self.capacity = capacity
-        self.memory = []
-        self.position = 0
-
-    def push(self, *args):
-        """Saves a transition."""
-        if len(self.memory) < self.capacity:
-            self.memory.append(None)
-        self.memory[self.position] = Transition(*args)
-        self.position = (self.position + 1) % self.capacity
-
-    def sample(self, batch_size):
-        return random.sample(self.memory, batch_size)
-
-    def __len__(self):
-        return len(self.memory)
+import mmap
+import json
+import time
 
 
 class TrackCyclingInstance():
     def __init__(self):
-        self.p = subprocess.Popen("src/CycloTron")
+        
         self.pipein = os.open("status", os.O_RDONLY)
-        self.pipeout = os.open("commands", os.O_WRONLY)
+        self.rider_ids = [0,1]
+        self.desc_size = 24
+        # write a simple example file
+        with open("commands", "w+b") as f:
+            f.write(b"\x00" * 1024)
+            for id in self.rider_ids:
+                print(id)
+                f.seek(0)
+                f.write(b'%8x%8f%8f' % (id, 0, 0))
+            self.commands_mmap = mmap.mmap(f.fileno(), 1024)
+        self.p = subprocess.Popen("src/CycloTron")
         atexit.register(self.cleanup)
 
-    def send_command(self, command, rider_id, value=None):
-        if value is not None:
-            os.write(self.pipeout, f"{command} {rider_id} {value}\n".encode())
-        else:
-            os.write(self.pipeout, f"{command} {rider_id}\n".encode())
+
+    def send_command(self, rider_id, power, steering):
+        self.commands_mmap[self.desc_size * len(self.rider_ids)] = 1
+        time.sleep(0.01) # avoir race condition ? lol
+        idx = self.rider_ids.index(rider_id)
+        offset = self.desc_size * idx
+        self.commands_mmap.seek(offset)
+        byte_array =b'%8i%8i%8i' % (rider_id, power, steering)
+        self.commands_mmap.write(byte_array)
+        self.commands_mmap[self.desc_size * len(self.rider_ids)] = 0
 
     def read_status(self, rider_id):
+        """
         self.send_command("status", rider_id)
         y = ""
         while(True):
@@ -54,6 +52,7 @@ class TrackCyclingInstance():
         for i in range(len(y) // 2):
             res[y[2*i]] = float(y[2*i+1])
         return res
+        """
 
     def cleanup(self):
         self.p.kill()
@@ -90,21 +89,17 @@ class TrackCycling(gym.Env):
         self.action_space = spaces.Box(low=self.min_action, high=self.max_action, dtype=np.float32)
 
     def step(self, action):
-        self.instance.send_command("power", self.rider_id, action[0])
-        self.instance.send_command("steering", self.rider_id, action[1])
-        status = self.instance.read_status(self.rider_id)
-        observation = np.zeros((len(self.observations), ), dtype=np.float32)
-        for i, o in enumerate(self.observations):
-            observation[i] = status[o]
-        done = status["finished"] > 0
-        if done:
-            reward = 1 if status["win"] > 0 else -1
-        else:
-            reward = -0.1
-        return observation, reward, done, status
-
-    def reset(self):
-        os.write(self.pipeout, f"reset".encode())
+        self.instance.send_command(self.rider_id, int(action[0]), int(action[1]))
+        # status = self.instance.read_status(self.rider_id)
+        # observation = np.zeros((len(self.observations), ), dtype=np.float32)
+        # for i, o in enumerate(self.observations):
+        #     observation[i] = status[o]
+        # done = status["finished"] > 0
+        # if done:
+        #     reward = 1 if status["win"] > 0 else -1
+        # else:
+        #     reward = -0.1
+        # return observation, reward, done, status
 
     def render(self, mode='human', close=False):
         pass
@@ -115,10 +110,11 @@ if __name__ == "__main__":
     tc_1 = TrackCycling(10, 400, 100, 100, 8, 45, 1, instance)
     # agent = DQNAgent(tc_0, use_conv=False)
     while True:
-        observation, reward, done, status = tc_0.step(tc_0.action_space.sample())
-        observation, reward, done, status = tc_1.step(tc_1.action_space.sample())
-        print(observation[1])
-        if done:
-            break
+        tc_0.step(tc_0.action_space.sample())
+        tc_1.step(tc_1.action_space.sample())
+        time.sleep(0.1)
+        #print(observation[1])
+        #if done:
+        #    break
 
     instance.p.wait()
