@@ -4,12 +4,3 @@
 [submodule "mio"]
 	path = mio
 	url = https://github.com/mandreyel/mio
-[submodule "json"]
-	path = json
-	url = https://github.com/nlohmann/json
-[submodule "3dfluid"]
-	path = 3dfluid
-	url = https://github.com/BlainMaguire/3dfluid
-[submodule "FluidSolver2D"]
-	path = FluidSolver2D
-	url = https://github.com/slallement/FluidSolver2D

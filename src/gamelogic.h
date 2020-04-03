@@ -6,6 +6,7 @@
 #include "track.h"
 #include "rider.h"
 #include "race.h"
+#include "utils.h"
 
 class GameLogic {
     private:

@@ -11,7 +11,7 @@ include_directories(../toml11)
 include_directories(../mio/single_include)
 include_directories(../json/include)
 
-add_executable(CycloTron main.cpp gamelogic.cpp track.cpp rider.cpp race.cpp )
+add_executable(CycloTron utils.cpp main.cpp gamelogic.cpp track.cpp rider.cpp race.cpp)
 target_link_libraries(CycloTron PRIVATE
     Magnum::Application
     Magnum::GL

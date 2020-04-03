@@ -1,0 +1,20 @@
+# CMake generation dependency list for this directory.
+C:/Program Files/CMake/share/cmake-3.17/Modules/FindOpenGL.cmake
+C:/Program Files/CMake/share/cmake-3.17/Modules/FindPackageHandleStandardArgs.cmake
+C:/Program Files/CMake/share/cmake-3.17/Modules/FindPackageMessage.cmake
+C:/Program Files/CMake/share/cmake-3.17/Modules/SelectLibraryConfigurations.cmake
+C:/Users/timwi/source/repos/anttrack/modules/FindCorrade.cmake
+C:/Users/timwi/source/repos/anttrack/modules/FindImGui.cmake
+C:/Users/timwi/source/repos/anttrack/modules/FindMagnum.cmake
+C:/Users/timwi/source/repos/anttrack/modules/FindMagnumIntegration.cmake
+C:/Users/timwi/source/repos/anttrack/modules/FindSDL2.cmake
+C:/Users/timwi/source/repos/anttrack/src/CMakeLists.txt
+C:/Users/timwi/source/repos/vcpkg/installed/x86-windows/share/cmake/Corrade/CorradeLibSuffix.cmake
+C:/Users/timwi/source/repos/vcpkg/installed/x86-windows/share/cmake/Corrade/UseCorrade.cmake
+C:/Users/timwi/source/repos/vcpkg/installed/x86-windows/share/eigen3/Eigen3Config.cmake
+C:/Users/timwi/source/repos/vcpkg/installed/x86-windows/share/eigen3/Eigen3ConfigVersion.cmake
+C:/Users/timwi/source/repos/vcpkg/installed/x86-windows/share/eigen3/Eigen3Targets.cmake
+C:/Users/timwi/source/repos/vcpkg/installed/x86-windows/share/imgui/imguiConfig-debug.cmake
+C:/Users/timwi/source/repos/vcpkg/installed/x86-windows/share/imgui/imguiConfig-release.cmake
+C:/Users/timwi/source/repos/vcpkg/installed/x86-windows/share/imgui/imguiConfig.cmake
+C:/Users/timwi/source/repos/vcpkg/installed/x86-windows/share/sdl2/vcpkg-cmake-wrapper.cmake

@@ -109,10 +109,13 @@ Vec3f GameLogic::rider_position_xyz(int id) {
 
 std::string GameLogic::status() {
     std::stringstream ss;
-    ss << "ids ";
     for (auto id : _rider_ids)
     {
-        ss << id;
+        ss << "id " << id;
+        ss << " position " << _riders[id].position(0) << " " << _riders[id].position(1);
+        ss << " velocity " << _riders[id].velocity();
+        ss << " elapsed_dist " << _race.cumulative_distance(id);
+        ss << " distance_to_finish " << _race.distance_to_finish(id) << std::endl;
     }
     ss << std::endl;
     return ss.str();

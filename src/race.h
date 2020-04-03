@@ -5,6 +5,7 @@
 
 #include "rider.h"
 #include "track.h"
+#include "utils.h"
 
 class Race {
     int _n_laps;
@@ -31,10 +32,9 @@ class Race {
         void update(double dt, std::map<int, Rider> &riders) ;
         void start();
         std::vector<int> rankings() {return _rankings;};
-        std::vector<float> timings() {return std::vector<float>({_cumulative_time[0], _cumulative_time[1]});};
-        std::vector<float> cumulative_distance() {return {_cumulative_distance[0], _cumulative_distance[1]};};
-        std::vector<float> distance_to_finish() {return {_total_distance - _cumulative_distance[0], 
-                                                        _total_distance - _cumulative_distance[1]};};
+        float timings(int id) {return _cumulative_time[id];};
+        float cumulative_distance(int id) {return _cumulative_distance[id];};
+        float distance_to_finish(int id) {return _total_distance - _cumulative_distance[id];};
 };
 
 #endif // src/race_h_INCLUDED

@@ -54,35 +54,6 @@ static const Color3 track_color(0x0000ff_rgbf);
 static const Color3 track_color_up(0x000000_rgbf);
 static const Color3 track_color_finish(0xffffff_rgbf);
 
-/* class Rider3D : public Object3D {
-    const Rider& _rider;
-    std::string _window_title;
-    std::stringstream _status;
-
-    public:
-        Rider3D(Scene3D* scene, const Rider& rider) : Object3D{scene}, _rider(rider) {
-                std::stringstream ss;
-                // ss << "Rider " << rider->id();
-                _window_title = ss.str();
-            };
-        void update() {
-            auto pos_xyz = _rider.pos_xyz();
-            auto transformation = Math::Matrix4<float>::translation({float(pos_xyz[0]), float(pos_xyz[1]), float(pos_xyz[2]) + 1}) *
-                    Math::Matrix4<float>::scaling({0.5f, 0.5f, 0.5f});
-            setTransformation(transformation);
-
-            DescMap map = _rider.desc();
-            _status.str("");
-            for (auto x: map) {
-                _status << x.first << ": \n\t" << x.second << std::endl;
-            }
-        }
-
-        const Rider& rider() const {
-            return _rider;
-        }
-}; */
-
 class TrackApp: public Platform::Application {
     public:
         explicit TrackApp(const Arguments& arguments);
@@ -171,7 +142,7 @@ TrackApp::TrackApp(const Arguments& arguments): Platform::Application{arguments,
     std::cout << "Init memory maps...";
     int page_size = 1024;
     std::error_code error;
-    allocate_file("status", page_size);
+    allocateFile("status", page_size);
     commands_mmap = mio::make_mmap_source("commands", error);
     status_mmap = mio::make_mmap_sink("status", error);
 
@@ -325,7 +296,7 @@ void TrackApp::loadMeshes() {
         _rider_objects[id] = rider_3d;
         auto cube = Primitives::cubeSolid();
         _rider_meshes[id] = MeshTools::compile(cube);
-        auto color = hex_to_color(GameLogic::get().rider_color(id));
+        auto color = hexToColor(GameLogic::get().rider_color(id));
         for (int i = 0; i < 36; i++) {
             colors[i] = color;
         }

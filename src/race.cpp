@@ -66,11 +66,12 @@ void Race::update(double dt, std::map<int, Rider>& riders) {
             _rider_positions[i] = riders[i].position(0);
             continue;
         }
-        if (_current_n_laps[i] == _n_laps)
+        if (_current_n_laps[i] == _n_laps + 1)
             continue;
         float dl = riders[i].position(0) - _rider_positions[i];
         adjust_diff(dl);
-        _cumulative_distance[i] += dl;
+        if (_current_n_laps[i] > 0)
+            _cumulative_distance[i] += dl;
         flag = false;
         float to_finish_line = riders[i].position(0) - finish_line;
         adjust_diff(to_finish_line);
@@ -89,6 +90,6 @@ void Race::update(double dt, std::map<int, Rider>& riders) {
         _rankings = {0, 1};
     else
         _rankings = {1,0};
-    _is_finished = (_current_n_laps[0] == _n_laps) || (_current_n_laps[1] == _n_laps);
+    _is_finished = (_current_n_laps[0] == _n_laps + 1) || (_current_n_laps[1] == _n_laps + 1);
     return;
 }

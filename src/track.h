@@ -5,9 +5,7 @@
 #include <vector>
 #include <Eigen/Dense>
 
-typedef Eigen::Vector3f Vec3f;
-typedef Eigen::Vector2f Vec2f;
-typedef std::pair<Vec3f, Vec3f> PosVel;
+#include "utils.h"
 
 enum class TrackSegment { Straight1, Bank1, Straight2, Bank2 };
 
