@@ -127,7 +127,9 @@ class FlatDrawable: public SceneGraph::Drawable3D {
         GL::Mesh& _track_mesh;
 };
 
-TrackApp::TrackApp(const Arguments& arguments): Platform::Application{arguments, NoCreate} {
+TrackApp::TrackApp(const Arguments& arguments): Platform::Application{arguments, Configuration{}
+        .setTitle("Track Simulator")
+        .setWindowFlags(Configuration::WindowFlag::Resizable)} {
     /* Load TOML config */
     std::cout << "Loading config...";
     _config = toml::parse("config.toml");

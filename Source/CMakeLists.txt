@@ -12,7 +12,7 @@ include_directories(../toml11)
 include_directories(../mio/single_include)
 include_directories(../json/include)
 
-add_executable(TrackSim TrackSim.cpp Track.cpp Common.cpp)
+add_executable(TrackSim TrackSim.cpp Track.cpp Rider.cpp Common.cpp)
 target_link_libraries(TrackSim PRIVATE
     Magnum::Application
     Magnum::GL

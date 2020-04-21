@@ -19,8 +19,7 @@ target_link_libraries(CycloTron PRIVATE
     Magnum::MeshTools
     Magnum::Primitives
     Magnum::SceneGraph
-    Magnum::Shaders
-    MagnumIntegration::Eigen) 
+    Magnum::Shaders) 
 
 # Make the executable a default target to build & run in Visual Studio
 set_property(DIRECTORY ${PROJECT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT CycloTron)

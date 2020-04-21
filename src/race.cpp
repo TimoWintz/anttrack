@@ -25,7 +25,7 @@ std::map<int, Vec2f> Race::rider_positions()
         float position_h = i * GameLogic::get().bike_width();
         if (position_h > GameLogic::get().track_width()) {
             i = 0;
-            position_h = 0;
+            position_h = 0; 
             j += 1;
         }
         float position_d = GameLogic::get().track_length() - j * GameLogic::get().bike_length() ;

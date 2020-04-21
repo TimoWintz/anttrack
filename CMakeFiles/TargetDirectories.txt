@@ -1,3 +1,0 @@
-C:/Users/timwi/source/repos/anttrack/CMakeFiles/ALL_BUILD.dir
-C:/Users/timwi/source/repos/anttrack/CMakeFiles/ZERO_CHECK.dir
-C:/Users/timwi/source/repos/anttrack/src/CMakeFiles/CycloTron.dir

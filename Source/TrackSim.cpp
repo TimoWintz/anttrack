@@ -4,6 +4,7 @@
 #include "Track.hpp"
 
 
+
 namespace TrackSim {
     using namespace Magnum;
     using namespace Math::Literals;
@@ -73,6 +74,8 @@ namespace TrackSim {
         /* Import track obj */
         if(!importer->openFile("Data/bike.dae"))
             std::exit(4);
+
+        _rider.load(*importer);
     }
 
     void TrackSimApp::initPhysics() {
@@ -98,7 +101,7 @@ namespace TrackSim {
         /* Draw colliders */
         if (_drawDebug) {
             _debugDraw.setTransformationProjectionMatrix(
-            _camera->projectionMatrix()*_camera->cameraMatrix());
+            _camera->projectionMatrix()*_camera->cameraMatrix()*_manipulator.transformation());
             _bWorld.debugDrawWorld();
         }
 
@@ -111,6 +114,61 @@ namespace TrackSim {
     void  TrackSimApp::viewportEvent(ViewportEvent& event) {
         GL::defaultFramebuffer.setViewport({{}, event.framebufferSize()});
         _camera->setViewport(event.windowSize());
+    }
+
+    void TrackSimApp::mousePressEvent(MouseEvent& event) {
+    if(event.button() == MouseEvent::Button::Left)
+        _previousPosition = positionOnSphere(event.position());
+}
+
+    void TrackSimApp::mouseReleaseEvent(MouseEvent& event) {
+        if(event.button() == MouseEvent::Button::Left)
+            _previousPosition = Vector3();
+    }
+
+    void TrackSimApp::mouseScrollEvent(MouseScrollEvent& event) {
+        if(!event.offset().y()) return;
+
+        /* Distance to origin */
+        const Float distance = _cameraObject.transformation().translation().z();
+
+        /* Move 15% of the distance back or forward */
+        _cameraObject.translate(Vector3::zAxis(
+            distance*(1.0f - (event.offset().y() > 0 ? 1/0.85f : 0.85f))));
+
+        redraw();
+    }
+
+    Vector3 TrackSimApp::positionOnSphere(const Vector2i& position) const {
+        const Vector2 positionNormalized = Vector2{position}/Vector2{_camera->viewport()} - Vector2{0.5f};
+        const Float length = positionNormalized.length();
+        const Vector3 result(length > 1.0f ? Vector3(positionNormalized, 0.0f) : Vector3(positionNormalized, 1.0f - length));
+        return (result*Vector3::yScale(-1.0f)).normalized();
+    }
+
+    void TrackSimApp::mouseMoveEvent(MouseMoveEvent& event) {
+        if(!(event.buttons() & MouseMoveEvent::Button::Left)) return;
+
+        const Vector3 currentPosition = positionOnSphere(event.position());
+        const Vector3 axis = Math::cross(_previousPosition, currentPosition);
+
+        if(_previousPosition.length() < 0.001f || axis.length() < 0.001f) return;
+
+        _manipulator.rotate(Math::angle(_previousPosition, currentPosition), axis.normalized());
+        _previousPosition = currentPosition;
+
+        redraw();
+    }
+
+    void TrackSimApp::keyPressEvent(KeyEvent& event){
+        /*Vector3 pos = positionOnSphere({0, 0});
+        if (event.key() == KeyEvent::Key::Up) {
+            _manipulator.translate(-pos);
+        }
+        if (event.key() == KeyEvent::Key::Down) {
+            _manipulator.translate(pos);
+        }
+        redraw();*/
     }
 
 

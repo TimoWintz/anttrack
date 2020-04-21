@@ -2,7 +2,8 @@
 #include "Common.hpp"
 #include "RigidBody.hpp"
 #include "Track.hpp"
-#include "Vehicle.hpp"
+#include "LogicComponent.hpp"
+#include "Rider.hpp"
 
 #include "btBulletDynamicsCommon.h"
 
@@ -24,9 +25,12 @@
 #include <Magnum/Primitives/Cube.h>
 #include <Magnum/Primitives/UVSphere.h>
 #include <Magnum/SceneGraph/Camera.h>
+#include <Magnum/SceneGraph/FeatureGroup.h> 
+
 #include <Magnum/SceneGraph/Drawable.h>
 #include <Magnum/SceneGraph/MatrixTransformation3D.h>
 #include <Magnum/SceneGraph/Scene.h>
+
 #include <Magnum/Shaders/Flat.h>
 #include <Magnum/Timeline.h>
 #include <Magnum/Trade/AbstractImporter.h>
@@ -49,6 +53,14 @@ namespace TrackSim {
         private:
             void drawEvent() override;
             void viewportEvent(ViewportEvent& event) override;
+            void mousePressEvent(MouseEvent& event) override;
+            void mouseReleaseEvent(MouseEvent& event) override;
+            void mouseMoveEvent(MouseMoveEvent& event) override;
+            void mouseScrollEvent(MouseScrollEvent& event) override;
+            void keyPressEvent(KeyEvent& event) override;
+
+            Vector3 positionOnSphere(const Vector2i& position) const;
+            Vector3 _previousPosition;
 
             void loadTrack();
             void loadRider();
@@ -59,6 +71,7 @@ namespace TrackSim {
 
             SceneGraph::Camera3D* _camera;
             SceneGraph::DrawableGroup3D _drawables;
+            LogicComponentGroup _logicComponents;
 
             GL::Mesh _box;
             Shaders::Flat3D _shader;
@@ -69,7 +82,7 @@ namespace TrackSim {
             btCollisionDispatcher _bDispatcher{&_bCollisionConfig};
             btSequentialImpulseConstraintSolver _bSolver;
 
-            bool _drawDebug{false};
+            bool _drawDebug{true};
 
             /* The world has to live longer than the scene because RigidBody
             instances have to remove themselves from it on destruction */
@@ -80,7 +93,8 @@ namespace TrackSim {
             Object3D _cameraObject;
             Object3D _manipulator; // Parent of all objects in the scene
             Track _track{&_manipulator, &_bWorld, _drawables};
-            Containers::Array<Object3D> _riders;
+            Rider _rider{&_manipulator, &_bWorld, _drawables, _logicComponents};
+            //Containers::Array<Object3D> _riders;
             
 
             Timeline _timeline;
